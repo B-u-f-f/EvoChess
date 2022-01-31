@@ -1,21 +1,21 @@
 import numpy as np
+from typing import Dict
 
 
 class TTTGame:
 
-    # 1 -> 'x', 0 -> 'o'
-    __DEFAULT = 10
+    __DEFAULT  : int = 10
 
-    __ZERO = 1
-    __CROSS = -1
-    __TIE = 0
+    __ZERO     : int = +1
+    __CROSS    : int = -1
+    __TIE      : int = 00
+    __COLS     : int = +3 
+    __ROWS     : int = +3
+    currPlayer : int = __ZERO
 
-    __DISPLAYCHARS = {__ZERO: 'o', __CROSS: 'x'}
-    __COLS = 3 
-    __ROWS = 3
+    __DISPLAYCHARS : Dict[int, str] = {__ZERO: 'o', __CROSS: 'x'}
 
-    board = np.full((__ROWS, __COLS), __DEFAULT)
-    currPlayer = __ZERO
+    board : np.ndarray = np.full((__ROWS, __COLS), __DEFAULT)
     
     
     gameResult = None
