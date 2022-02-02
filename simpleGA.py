@@ -78,14 +78,19 @@ def clamp(val, minval, maxval):
     return sorted((minval, val, maxval))[1]
 
 class Organism:
-    def __init__(self, chromLen: int = 1, chromMin: float = 0.0, chromMax: float = 1.0, chrom: np.ndarray = None) -> None:
-
-        if chrom is None:
-            self.chromosome : np.ndarray = rng.uniform(size = chromLen, low = chromMin, high = chromMax)
-        else:
-            self.chromosome = chrom
+    def __init__(self, chrom: np.ndarray = None) -> None:
+        self.chromosome = chrom
         self.fitness : float = 0.0 
     
+    
+    @classmethod
+    def createRandomOrg(cls, chromLen: int = 1, 
+            chromMin: float = np.finfo('float32').min, 
+            chromMax: float = np.finfo('float32').max) -> Organism:
+
+        chromosome : np.ndarray = rng.uniform(size = chromLen, low = chromMin, high = chromMax) 
+        return cls(chromosome) 
+
     def mutate(self, mRate):
         self.chromosome += rng.normal(loc = 0, scale = mRate, size = self.chromosome.shape)
     
@@ -93,29 +98,54 @@ class Organism:
     def getChild(parent1 : Organism, parent2 : Organism, interpolFac : float) -> Organism:
         childChrom = parent1.chromosome * interpolFac + (1 - interpolFac) * parent2.chromosome 
 
-        return Organism(chrom = childChrom)
+        return Organism(childChrom)
     
 class Population:
     
-    def __init__(self, popSize: int, 
-            orgData : t.Dict, 
-            fitness : t.Callable, 
-            selectPer : float, 
-            interpolFac : float, 
-            mutationRate : float) -> None:
+    def __init__(self, 
+            popSize: int = 100, 
+            orgList: t.List = [],              
+            fitness: t.Callable = lambda x: np.max(x), 
+            selectPer : float = 0.20, 
+            interpolFac : float = 0.5, 
+            mutationRate : float = 1.0
+            ) -> None:
 
-        self.orgList : t.List = [
-                Organism(
-                    chromLen = orgData['len'], 
-                    chromMin = orgData['min'],
-                    chromMax = orgData['max']) 
-                for _ in range(popSize)]  
-
+        self.orgList : t.List = orgList 
         self.popSize : int = popSize
         self.fitFunc : t.Callable = fitness
         self.k : int = int(popSize * clamp(selectPer, 0.0, 1.0))
         self.interpolFac : float = clamp(interpolFac, 0.0, 1.0)
         self.mutRate : float = mutationRate 
+    
+    @classmethod
+    def initFromRandomOrgs(cls,
+            popSize: int = 100, 
+            orgData: t.Dict = {
+                'len': 2, 
+                'min': np.finfo('float32').min, 
+                'max': np.finfo('float32').max
+                }, 
+            fitness: t.Callable = lambda x: np.max(x), 
+            selectPer : float = 0.20, 
+            interpolFac : float = 0.5, 
+            mutationRate : float = 1.0
+
+            ) -> Population:
+
+        orgList : t.List = [
+                Organism.createRandomOrg(
+                    chromLen = orgData['len'], 
+                    chromMin = orgData['min'],
+                    chromMax = orgData['max']) 
+                for _ in range(popSize)] 
+
+        return Population(popSize = popSize, 
+                orgList = orgList,
+                fitness = fitness,
+                selectPer = selectPer,
+                interpolFac = interpolFac,
+                mutationRate = mutationRate)
 
     def selection(self) -> (t.List, t.List):
         for o in self.orgList:
@@ -150,21 +180,23 @@ class Population:
 
 def GA():
 
-    pop = Population(popSize = 100, 
-            orgData = {'len': 2, 'min': -3.0, 'max': -2.0},
-            fitness = lambda c : rastrigin2D(c[0], c[1], 0, -0),
+    pop = Population.initFromRandomOrgs(
+            popSize = 100, 
+            orgData = {'len': 2, 'min': -75.0, 'max': -50.0},
+            fitness = lambda c : shafferF62D(c[0], c[1], 30, -30),
             selectPer = 0.20,
             interpolFac = 0.5,
-            mutationRate = 0.5)
+            mutationRate = 2.0
+            )
 
     funcData = {
-            'xmin': -5.12,
-            'xmax': +5.12,
-            'xiter': 100,
-            'ymin': -5.12,
-            'ymax': +5.12,
-            'yiter': 100,
-            'function': lambda x, y : rastrigin2D(x, y, 0, -0)
+            'xmin': -100,
+            'xmax': +100,
+            'xiter': 500,
+            'ymin': -100,
+            'ymax': +100,
+            'yiter': 500,
+            'function': lambda x, y : shafferF62D(x, y, 30, -30)
             }
 
 
@@ -178,7 +210,7 @@ def GA():
         selectedChrom = [p.chromosome for p in parents]
         rejectedChrom = [r.chromosome for r in rejected]
 
-        saveImage('third', g, 'Rastrigin-2D',
+        saveImage('fourth', g, 'Shaffer-2D',
                 {'selected': selectedChrom, 'rejected': rejectedChrom}, funcData)
 
 if __name__ == '__main__':
