@@ -151,7 +151,9 @@ class Population:
 
 
 class Algorithm(ABC):
-    def __init__(self):
+
+    @abstractmethod
+    def __init__(self, population: Population = None, **kwargs):
         pass
     
     @abstractclassmethod
@@ -182,13 +184,15 @@ class Algorithm(ABC):
 
 class GeneticAlgorithm(Algorithm):
     
+   
+    # kwarg: selectPer, interpolFac, mutationRate  
     def __init__(self, 
-            population: Population = None,
-            selectPer: float = 0.20, 
-            interpolFac: float = 0.5, 
-            mutationRate: float = 1.0
+            population: Population = None, **kwargs
             ) -> None:
 
+        selectPer: float   = kwargs.pop('selectPer', 0.20) 
+        interpolFac: float = kwargs.pop('interpolFac', 0.5)
+        mutationRate: float = kwargs.pop('mutationRate', 1.0)
 
         self.population: Population = population
         self.k:  int = int(population.popSize * clamp(selectPer, 0.0, 1.0))
@@ -207,16 +211,9 @@ class GeneticAlgorithm(Algorithm):
             **kwargs,
             ) -> GeneticAlgorithm:
 
-        selectPer : float   = kwargs.pop('selectPer', 0.20) 
-        interpolFac : float = kwargs.pop('interpolFac', 0.5)
-        mutationRate : float =kwargs.pop('mutationRate', 1.0)
-
         p = Population.initFromRandomOrgs(popSize, orgData, fitness)  
 
-        return cls(p,
-                selectPer = selectPer,
-                interpolFac = interpolFac,
-                mutationRate = mutationRate)
+        return cls(p, **kwargs)
 
     def selection(self) -> (t.List, t.List):
         # Using truncation selection 
@@ -240,14 +237,36 @@ class GeneticAlgorithm(Algorithm):
         for c in childrenList:
             c.mutate(self.mutRate)
 
-    def updateOrgList(self, parentsList: t.List, childrenList: t.List):
-        self.population.updateOrgList(parentsList, childrenList)
 
+class DifferentialEvolution(Algorithm):
 
+    @abstractmethod
+    def __init__(self, population: Population = None, **kwargs):
+        pass
 
+    @abstractclassmethod
+    def initRandomPop(cls, popSize: int = 100, 
+            orgData: t.Dict = {
+                'len': 2, 
+                'min': np.finfo('float32').min, 
+                'max': np.finfo('float32').max
+                }, 
+            fitness: t.Callable = lambda x: np.max(x), **kwargs):
 
-class DifferentialEvolution(Population):
-    pass
+        pass
+    
+    @abstractmethod
+    def selection(self) -> (t.List, t.List):
+        pass
+    
+    @abstractmethod
+    def crossover(self, parentsList: t.List) -> t.List:
+        pass
+    
+    @abstractmethod
+    def mutation(self, childrenList: t.List):
+        pass
+
 
 def GA():
 
