@@ -105,18 +105,25 @@ class Population:
     def __init__(self, 
             popSize: int = 100, 
             orgList: t.List = [],              
-            fitness: t.Callable = lambda x: np.max(x), 
-            selectPer : float = 0.20, 
-            interpolFac : float = 0.5, 
-            mutationRate : float = 1.0
+            fitness: t.Callable = lambda x: np.max(x) 
+#            selectPer : float = 0.20, 
+#            interpolFac : float = 0.5, 
+#            mutationRate : float = 1.0
             ) -> None:
 
         self.orgList : t.List = orgList 
         self.popSize : int = popSize
         self.fitFunc : t.Callable = fitness
-        self.k : int = int(popSize * clamp(selectPer, 0.0, 1.0))
-        self.interpolFac : float = clamp(interpolFac, 0.0, 1.0)
-        self.mutRate : float = mutationRate 
+#        self.k : int = int(popSize * clamp(selectPer, 0.0, 1.0))
+#        self.interpolFac : float = clamp(interpolFac, 0.0, 1.0)
+#        self.mutRate : float = mutationRate 
+
+
+#    def initFromCopy(self, cpy: Population):
+#        self.orgList = cpy.orgList
+#        self.popSize = cpy.popSize
+#        self.fitFunc = cpy.fitFunc
+
     
     @classmethod
     def initFromRandomOrgs(cls,
@@ -126,10 +133,10 @@ class Population:
                 'min': np.finfo('float32').min, 
                 'max': np.finfo('float32').max
                 }, 
-            fitness: t.Callable = lambda x: np.max(x), 
-            selectPer : float = 0.20, 
-            interpolFac : float = 0.5, 
-            mutationRate : float = 1.0
+            fitness: t.Callable = lambda x: np.max(x) 
+#            selectPer : float = 0.20, 
+#            interpolFac : float = 0.5, 
+#            mutationRate : float = 1.0
 
             ) -> Population:
 
@@ -142,27 +149,89 @@ class Population:
 
         return Population(popSize = popSize, 
                 orgList = orgList,
-                fitness = fitness,
+                fitness = fitness)
+                #selectPer = selectPer,
+                #interpolFac = interpolFac,
+                #mutationRate = mutationRate)
+    
+    def truncationSelection(self, topCount: int) -> (t.List, t.List):
+        for o in self.orgList:
+            o.fitness = self.fitFunc(o.chromosome)
+        
+        s = sorted(self.orgList, key = lambda o : o.fitness)
+        parents = s[:topCount] 
+
+        return parents, s[(topCount+1):]
+
+#    def crossover(self, parentsList : t.List) -> t.List:
+#        numChildren = self.popSize - self.k 
+#        children : t.List = []
+#        high = len(parentsList) 
+#        for _ in range(0, numChildren):
+#            p : np.ndarray = rng.choice(a = high, size = 2) 
+#
+#            p1 = parentsList[p[0]]
+#            p2 = parentsList[p[1]]
+#
+#            children.append(Organism.getChild(p1, p2, self.interpolFac))
+#
+#        return children
+
+#    def mutation(self, childrenList: t.List):
+#        for c in childrenList:
+#            c.mutate(self.mutRate)
+
+    def updateOrgList(self, parentsList: t.List, childrenList: t.List):
+        self.orgList = parentsList + childrenList
+
+
+class GeneticAlgorithm():
+    
+    def __init__(self, 
+            population: Population = None,
+            selectPer: float = 0.20, 
+            interpolFac: float = 0.5, 
+            mutationRate: float = 1.0
+            ) -> None:
+
+
+        self.population: Population = population
+        self.k:  int = int(population.popSize * clamp(selectPer, 0.0, 1.0))
+        self.interpolFac: float = clamp(interpolFac, 0.0, 1.0)
+        self.mutRate: float = mutationRate 
+
+    @classmethod
+    def initRandomPop(cls,
+            popSize: int = 100, 
+            orgData: t.Dict = {
+                'len': 2, 
+                'min': np.finfo('float32').min, 
+                'max': np.finfo('float32').max
+                }, 
+            fitness: t.Callable = lambda x: np.max(x), 
+            selectPer : float = 0.20, 
+            interpolFac : float = 0.5, 
+            mutationRate : float = 1.0
+
+            ) -> GeneticAlgorithm:
+
+        p = Population.initFromRandomOrgs(popSize, orgData, fitness)  
+
+        return cls(p,
                 selectPer = selectPer,
                 interpolFac = interpolFac,
                 mutationRate = mutationRate)
 
     def selection(self) -> (t.List, t.List):
-        for o in self.orgList:
-            o.fitness = self.fitFunc(o.chromosome)
-        
-        # using truncation selection
-        s = sorted(self.orgList, key = lambda o : o.fitness)
-        parents = s[:self.k] 
-
-        return parents, s[(self.k+1):]
+        # Using truncation selection 
+        return self.population.truncationSelection(self.k) 
 
     def crossover(self, parentsList : t.List) -> t.List:
-        numChildren = self.popSize - self.k 
+        numChildren = self.population.popSize - self.k 
         children : t.List = []
-        high = len(parentsList) - 1 
+        high = len(parentsList) 
         for _ in range(0, numChildren):
-            p : np.ndarray = rng.integers(low = 0, high = high, size = 2) 
+            p : np.ndarray = rng.choice(a = high, size = 2) 
 
             p1 = parentsList[p[0]]
             p2 = parentsList[p[1]]
@@ -176,11 +245,17 @@ class Population:
             c.mutate(self.mutRate)
 
     def updateOrgList(self, parentsList: t.List, childrenList: t.List):
-        self.orgList = parentsList + childrenList
+        self.population.updateOrgList(parentsList, childrenList)
+
+
+
+
+class DifferentialEvolution(Population):
+    pass
 
 def GA():
 
-    pop = Population.initFromRandomOrgs(
+    ga = GeneticAlgorithm.initRandomPop(
             popSize = 100, 
             orgData = {'len': 2, 'min': -75.0, 'max': -50.0},
             fitness = lambda c : shafferF62D(c[0], c[1], 30, -30),
@@ -202,15 +277,15 @@ def GA():
 
     for g in bar.tqdm(range(0, 100)):
         
-        parents, rejected = pop.selection()
-        children = pop.crossover(parents)
-        pop.mutation(children)
-        pop.updateOrgList(parents, children)
+        parents, rejected = ga.selection()
+        children = ga.crossover(parents)
+        ga.mutation(children)
+        ga.updateOrgList(parents, children)
         
         selectedChrom = [p.chromosome for p in parents]
         rejectedChrom = [r.chromosome for r in rejected]
 
-        saveImage('fourth', g, 'Shaffer-2D',
+        saveImage('fifth', g, 'Shaffer-2D',
                 {'selected': selectedChrom, 'rejected': rejectedChrom}, funcData)
 
 if __name__ == '__main__':
