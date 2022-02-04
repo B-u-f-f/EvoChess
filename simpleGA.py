@@ -1,9 +1,12 @@
 from __future__ import annotations
+
+from abc import ABC, abstractmethod, abstractclassmethod
 import os 
 
 import numpy as np
 import matplotlib as mat
 import matplotlib.pyplot as plt
+
 
 import typing as t
 import tqdm as bar
@@ -106,24 +109,11 @@ class Population:
             popSize: int = 100, 
             orgList: t.List = [],              
             fitness: t.Callable = lambda x: np.max(x) 
-#            selectPer : float = 0.20, 
-#            interpolFac : float = 0.5, 
-#            mutationRate : float = 1.0
             ) -> None:
 
         self.orgList : t.List = orgList 
         self.popSize : int = popSize
         self.fitFunc : t.Callable = fitness
-#        self.k : int = int(popSize * clamp(selectPer, 0.0, 1.0))
-#        self.interpolFac : float = clamp(interpolFac, 0.0, 1.0)
-#        self.mutRate : float = mutationRate 
-
-
-#    def initFromCopy(self, cpy: Population):
-#        self.orgList = cpy.orgList
-#        self.popSize = cpy.popSize
-#        self.fitFunc = cpy.fitFunc
-
     
     @classmethod
     def initFromRandomOrgs(cls,
@@ -134,10 +124,6 @@ class Population:
                 'max': np.finfo('float32').max
                 }, 
             fitness: t.Callable = lambda x: np.max(x) 
-#            selectPer : float = 0.20, 
-#            interpolFac : float = 0.5, 
-#            mutationRate : float = 1.0
-
             ) -> Population:
 
         orgList : t.List = [
@@ -150,10 +136,7 @@ class Population:
         return Population(popSize = popSize, 
                 orgList = orgList,
                 fitness = fitness)
-                #selectPer = selectPer,
-                #interpolFac = interpolFac,
-                #mutationRate = mutationRate)
-    
+   
     def truncationSelection(self, topCount: int) -> (t.List, t.List):
         for o in self.orgList:
             o.fitness = self.fitFunc(o.chromosome)
@@ -163,29 +146,41 @@ class Population:
 
         return parents, s[(topCount+1):]
 
-#    def crossover(self, parentsList : t.List) -> t.List:
-#        numChildren = self.popSize - self.k 
-#        children : t.List = []
-#        high = len(parentsList) 
-#        for _ in range(0, numChildren):
-#            p : np.ndarray = rng.choice(a = high, size = 2) 
-#
-#            p1 = parentsList[p[0]]
-#            p2 = parentsList[p[1]]
-#
-#            children.append(Organism.getChild(p1, p2, self.interpolFac))
-#
-#        return children
-
-#    def mutation(self, childrenList: t.List):
-#        for c in childrenList:
-#            c.mutate(self.mutRate)
-
     def updateOrgList(self, parentsList: t.List, childrenList: t.List):
         self.orgList = parentsList + childrenList
 
 
-class GeneticAlgorithm():
+class Algorithm(ABC):
+    def __init__(self):
+        pass
+    
+    @abstractclassmethod
+    def initRandomPop(cls, popSize: int = 100, 
+            orgData: t.Dict = {
+                'len': 2, 
+                'min': np.finfo('float32').min, 
+                'max': np.finfo('float32').max
+                }, 
+            fitness: t.Callable = lambda x: np.max(x), **kwargs):
+
+        pass
+    
+    @abstractmethod
+    def selection(self) -> (t.List, t.List):
+        pass
+    
+    @abstractmethod
+    def crossover(self, parentsList: t.List) -> t.List:
+        pass
+    
+    @abstractmethod
+    def mutation(self, childrenList: t.List):
+        pass
+
+    def updateOrgList(self, parentsList: t.List, childrenList: t.List):
+        self.population.updateOrgList(parentsList, childrenList)
+
+class GeneticAlgorithm(Algorithm):
     
     def __init__(self, 
             population: Population = None,
@@ -209,11 +204,12 @@ class GeneticAlgorithm():
                 'max': np.finfo('float32').max
                 }, 
             fitness: t.Callable = lambda x: np.max(x), 
-            selectPer : float = 0.20, 
-            interpolFac : float = 0.5, 
-            mutationRate : float = 1.0
-
+            **kwargs,
             ) -> GeneticAlgorithm:
+
+        selectPer : float   = kwargs.pop('selectPer', 0.20) 
+        interpolFac : float = kwargs.pop('interpolFac', 0.5)
+        mutationRate : float =kwargs.pop('mutationRate', 1.0)
 
         p = Population.initFromRandomOrgs(popSize, orgData, fitness)  
 
