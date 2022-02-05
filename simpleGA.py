@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod, abstractclassmethod
 import os 
 
 import numpy as np
@@ -102,7 +101,7 @@ class Organism:
         childChrom = parent1.chromosome * interpolFac + (1 - interpolFac) * parent2.chromosome 
 
         return Organism(childChrom)
-    
+  
 class Population:
     
     def __init__(self, 
@@ -136,6 +135,7 @@ class Population:
         return Population(popSize = popSize, 
                 orgList = orgList,
                 fitness = fitness)
+
    
     def truncationSelection(self, topCount: int) -> (t.List, t.List):
         for o in self.orgList:
@@ -149,42 +149,14 @@ class Population:
     def updateOrgList(self, parentsList: t.List, childrenList: t.List):
         self.orgList = parentsList + childrenList
 
+    def getOrgs(self, *arg) -> t.List:
+        out = []
+        for a in arg:
+            out.append(self.orgList[a])
+           
+        return out 
 
-class Algorithm(ABC):
-
-    @abstractmethod
-    def __init__(self, population: Population = None, **kwargs):
-        pass
-    
-    @abstractclassmethod
-    def initRandomPop(cls, popSize: int = 100, 
-            orgData: t.Dict = {
-                'len': 2, 
-                'min': np.finfo('float32').min, 
-                'max': np.finfo('float32').max
-                }, 
-            fitness: t.Callable = lambda x: np.max(x), **kwargs):
-
-        pass
-    
-    @abstractmethod
-    def selection(self) -> (t.List, t.List):
-        pass
-    
-    @abstractmethod
-    def crossover(self, parentsList: t.List) -> t.List:
-        pass
-    
-    @abstractmethod
-    def mutation(self, childrenList: t.List):
-        pass
-
-    def updateOrgList(self, parentsList: t.List, childrenList: t.List):
-        self.population.updateOrgList(parentsList, childrenList)
-
-class GeneticAlgorithm(Algorithm):
-    
-   
+class GeneticAlgorithm():  
     # kwarg: selectPer, interpolFac, mutationRate  
     def __init__(self, 
             population: Population = None, **kwargs
@@ -237,14 +209,23 @@ class GeneticAlgorithm(Algorithm):
         for c in childrenList:
             c.mutate(self.mutRate)
 
+    def updateOrgList(self, parentsList: t.List, childrenList: t.List):
+        self.population.updateOrgList(parentsList, childrenList)
 
-class DifferentialEvolution(Algorithm):
 
-    @abstractmethod
+class DifferentialEvolution():
+
+    # kwargs: p: crossover probability
+    #         w: differential weight
+    #         n: dimension of organism
+
     def __init__(self, population: Population = None, **kwargs):
-        pass
-
-    @abstractclassmethod
+        self.population: Population = population
+        self.p: float = clamp(kwargs.pop('p', 0.5), 0.0, 1.0)
+        self.w: float = clamp(kwargs.pop('w', 1.0), 0.0, 1.0)
+        self.n: int = kwargs.pop('n', 2)
+    
+    @classmethod
     def initRandomPop(cls, popSize: int = 100, 
             orgData: t.Dict = {
                 'len': 2, 
@@ -253,20 +234,41 @@ class DifferentialEvolution(Algorithm):
                 }, 
             fitness: t.Callable = lambda x: np.max(x), **kwargs):
 
-        pass
-    
-    @abstractmethod
-    def selection(self) -> (t.List, t.List):
-        pass
-    
-    @abstractmethod
-    def crossover(self, parentsList: t.List) -> t.List:
-        pass
-    
-    @abstractmethod
-    def mutation(self, childrenList: t.List):
-        pass
+        p = Population.initFromRandomOrgs(popSize, orgData, fitness)  
 
+        return cls(p, n = orgData['len'], **kwargs)
+   
+    def crossover(self, count: int = 3) -> None:
+
+        genIndices: t.Callable =\
+        lambda i: rng.choice(\
+        np.concatenate((np.arange(0, i), np.arange(i + 1, self.population.popSize))),\
+        size = count) 
+        
+        rand: t.Callable =\
+                lambda : rng.uniform(size=1)
+        
+        for i, o in enumerate(self.population.orgList):
+            t, u, v = genIndices(i) 
+            [a, b, c] = self.population.getOrgs(t, u, v)
+            
+            x = o.chromosome
+            z = a.chromosome + self.w * (b.chromosome - c.chromosome)
+            new = np.full(self.n, 0.0, dtype='float32')
+
+            j = rng.integers(low = 0, high = self.n, size = 1)
+
+            for i in range(0, self.n):
+                
+                if(i == j):
+                    new[i] = z[i]
+                elif(rand() <= self.p):
+                    new[i] = z[i]
+                else:
+                    new[i] = x[i]
+            
+            if(self.population.fitFunc(new) > self.population.fitFunc(x)):
+                o.chromosome = new
 
 def GA():
 
@@ -303,7 +305,39 @@ def GA():
         saveImage('fifth', g, 'Shaffer-2D',
                 {'selected': selectedChrom, 'rejected': rejectedChrom}, funcData)
 
+
+
+def DE():
+    de = DifferentialEvolution.initRandomPop(
+            popSize = 100, 
+            orgData = {'len': 2, 'min': -75.0, 'max': -50.0},
+            fitness = lambda c : shafferF62D(c[0], c[1], 30, -30),
+            p = 0.8, 
+            w = 1.0)
+            
+
+    funcData = {
+            'xmin': -100,
+            'xmax': +100,
+            'xiter': 500,
+            'ymin': -100,
+            'ymax': +100,
+            'yiter': 500,
+            'function': lambda x, y : shafferF62D(x, y, 30, -30)
+            }
+
+
+    for g in bar.tqdm(range(0, 100)):
+        de.crossover(3)   
+       
+        selectedChrom = [p.chromosome for p in de.population.orgList]
+
+        saveImage('sixth', g, 'Shaffer-2D',
+                {'selected': selectedChrom, 'rejected': []}, funcData)
+
+
+
 if __name__ == '__main__':
     suppress_qt_warnings()
-    GA()
+    DE()
 
