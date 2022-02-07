@@ -7,12 +7,19 @@ import matplotlib as mat
 import matplotlib.pyplot as plt
 
 import os 
+import typing as t
 
 def suppress_qt_warnings() -> None:
     os.environ["QT_DEVICE_PIXEL_RATIO"] = "0"
     os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
     os.environ["QT_SCREEN_SCALE_FACTORS"] = "1"
     os.environ["QT_SCALE_FACTOR"] = "1"
+
+
+class ValueOutOFRange(Exception):
+    def __init__(self, axis: str) -> None:
+        super().__init__(f'Values given for {axis}-axis are out of range.')
+
 
 class Function2D(ABC):
     _xmin = np.float32(-100.0)
@@ -31,18 +38,28 @@ class Function2D(ABC):
         self.yshift = yshift
         self.xiter = xiter
         self.yiter = yiter 
+    
+    def _checkBounds(self, x: NDArray[np.float32], y: NDArray[np.float32]) -> t.Union[None, str]:
+        if(np.any((self.xmin > x) | (x > self.xmax))):
+            return 'x'
 
+        if(np.any((self.ymin > y) | (y > self.ymax))):
+            return 'y'
+
+
+        return None 
 
     def evaluate(self, x: NDArray[np.float32], y: NDArray[np.float32]) -> NDArray[np.float32]:
-        if(not (self.xmin <= x <= self.xmax)):
-            pass
+        axis: t.Union[None, str] = self._checkBounds(x, y)
 
-        if(not (self.ymin <= y <= self.ymax)):
-            pass
+        if(axis is not None):
+            raise ValueOutOFRange(axis)
 
         return self._func(x, y)
+
+
     
-    def show(self, ax = None, pyplt = None) -> None:
+    def show(self, ax = None) -> None:
         x: NDArray[np.float32] = np.linspace(self.xmin, self.xmax, self.xiter) 
         y: NDArray[np.float32] = np.linspace(self.ymin, self.ymax, self.yiter) 
         
@@ -53,11 +70,9 @@ class Function2D(ABC):
         ax.imshow(z, interpolation='bilinear', 
             extent = [self.xmin, self.xmax, self.ymin, self.ymax], 
             origin = 'lower', 
-            cmap = mat.colormaps['YlOrBr'])
+            cmap = 'YlOrBr')
 
-        ax.title.set_text(self.graphtitle)
-
-        plt.show()
+        ax.title.set_text(self.graphtitle) 
 
 
     @abstractmethod
@@ -158,4 +173,8 @@ if __name__ == '__main__':
 
     fig, ax1 = plt.subplots(nrows = 1, ncols = 1, figsize=(12, 8), dpi = 80)
     sf = ShafferF62D(xshift = np.float32(30.0), yshift = np.float32(-30.0))
-    sf.show(ax1, plt)
+
+    sf.evaluate([100.0, 100.0], [100.0, 100.0])
+
+    sf.show(ax1)
+    plt.show()
