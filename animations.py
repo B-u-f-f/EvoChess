@@ -1,10 +1,12 @@
 from celluloid import Camera
-from testfunctions import ShafferF62D
+from testfunctions import Function2D, ShafferF62D
+from dataclasses import dataclass
 
 import matplotlib as mat
 import matplotlib.pyplot as plt
 import numpy as np
-import os
+from numpy.typing import NDArray 
+
 import typing as t
 
 
@@ -13,6 +15,29 @@ class BadData(Exception):
         super().__init__('Bad Data.')
 
 
+@dataclass
+class Datapoints:
+    xcoords: NDArray[np.float32] 
+    ycoords: NDArray[np.float32]
+    axis: mat.axis.Axis
+    colour: str = '#2164b0'
+    alpha: float = 0.6
+
+
+    @classmethod
+    def fromTupleCoords(cls, l: t.List[t.Tuple[np.float32, np.float32]], 
+            axis: mat.axis.Axis, 
+            colour: str ='#2164b0', 
+            alpha: float = 0.6):
+
+        x: NDArray[np.float32] = np.full(len(l), 0.0, dtype='float32') 
+        y: NDArray[np.float32] = np.full(len(l), 0.0, dtype='float32') 
+
+        for i, (a, b) in enumerate(l):
+            x[i] = a 
+            y[i] = b
+
+        return cls(x, y, axis, colour, alpha)
 
 class ScatterAnimation:
     
@@ -23,25 +48,33 @@ class ScatterAnimation:
     # 
     #   c is the colour of the plotted points: (rgb_string, alpha)
     #   a is the axis to plot
-    def __init__(self, numframes: int = 100, fig: mat.figure.Figure = None, *args) -> None:
+    def __init__(self, numframes: int = 100, fig: mat.figure.Figure = None, data: t.List[Datapoints] = None) -> None:
         
-        for (x, y, _, _) in args:
-            if((len(x) != len(y)) or (len(y) < numframes)):
-                raise BadData() 
+        if(data is None):
+            raise BadData() 
 
-        self.data = args
+        for d in data:
+            if ((len(d.xcoords) != len(d.ycoords)) or (len(d.ycoords) < numframes)):
+                raise BadData()
+
+        self.data = data 
         self.numframes: int = numframes
         self.camera = Camera(fig)
 
-    def createAndSaveAnimation(self) -> mat.animation.ArtistAnimation:
+    def createAnimation(self) -> mat.animation.ArtistAnimation:
         for i in range(self.numframes): 
-            for (x, y, c, a) in self.data:
-                a.scatter(x = x[i], y = y[i], c = c[0], alpha = c[1])
+            for d in self.data:
+                d.axis.scatter(x = d.xcoords[i], y = d.ycoords[i], c = d.colour, alpha = d.alpha)
                 
-                self.camera.snap()
+            self.camera.snap()
 
         anim = self.camera.animate()
         return anim
+
+def createFunctionAnimation(funcObj: Function2D, axis: mat.axis.Axis, filesavepath: str, sa: ScatterAnimation):
+    anim = sa.createAnimation()
+    funcObj.show(axis)
+    anim.save(filesavepath)
 
 if __name__ == '__main__':
     fig, ax1 = plt.subplots(nrows = 1, ncols = 1, figsize=(12, 8), dpi = 80)
@@ -49,12 +82,9 @@ if __name__ == '__main__':
     numframes = 10
     x1 = [] 
     y1 = []
-    c = ('#2164b0', 0.6)
     
     x2 = [] 
-    y2 = []
-    c2 = ('#25ba6b', 0.6)
- 
+    y2 = [] 
 
     rng = np.random.default_rng()
     for j in range(numframes):
@@ -65,7 +95,9 @@ if __name__ == '__main__':
         y2.append(rng.uniform(low = -100, high = 100, size = 10))
  
     
-    sa = ScatterAnimation(numframes, fig, (x1, y1, c, ax1), (x2, y2, c2, ax1))
-    anim = sa.createAndSaveAnimation() 
-    sf.show(ax1)
-    anim.save('./images/hello.gif')
+    d1 = Datapoints(x1, y1, ax1)
+    d2 = Datapoints(x2, y2, ax1, '#25ba6b')
+
+    sa = ScatterAnimation(numframes, fig, [d1, d2])
+    createFunctionAnimation(sf, ax1, './images/hello2.gif', sa)
+
