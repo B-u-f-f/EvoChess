@@ -10,6 +10,9 @@ import matplotlib.pyplot as plt
 import typing as t
 import tqdm as bar
 
+from testfunctions import ShafferF62D, Function2D, ValueOutOFRange 
+import animations as a
+
 rng = np.random.default_rng()
 
 def suppress_qt_warnings() -> None:
@@ -17,64 +20,6 @@ def suppress_qt_warnings() -> None:
     os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
     os.environ["QT_SCREEN_SCALE_FACTORS"] = "1"
     os.environ["QT_SCALE_FACTOR"] = "1"
-
-def shafferF62D(x : np.ndarray, y : np.ndarray, xShift : int, yShift : int) -> np.ndarray:
-    x += xShift
-    y += yShift
-
-    return 0.5 + ((np.sin(np.sqrt(x**2 + y**2)))**2 - 0.5)/((1 + 0.001 * (x**2 + y**2))**2)
-
-def rastrigin2D(x : np.ndarray, y : np.ndarray, xShift : int, yShift : int) -> np.ndarray:
-    x += xShift
-    y += yShift
-
-    return (x**2 - 10 * np.cos(2 * np.pi * x)) + (y**2 - 10 * np.cos(2 * np.pi * y)) + 20
-
-
-def saveImage(prefix: str, genCount: int, title: str, 
-        populationData: t.Dict, funcData : t.Dict) -> None:
-    X = np.linspace(funcData['xmin'], funcData['xmax'], funcData['xiter']) 
-    Y = np.linspace(funcData['ymin'], funcData['ymax'], funcData['yiter']) 
-
-    # X_SHAFF += 30
-    # Y_SHAFF -= 30
-
-    X, Y = np.meshgrid(X, Y)
-    Z = funcData['function'](X, Y) 
-
-    # X_RAS = Y_RAS = np.linspace(-5.12, 5.12, 500)
-    # X_RAS, Y_RAS = np.meshgrid(X_RAS, Y_RAS)
-    # Z_RAS = (X_RAS**2 - 10 * np.cos(2 * np.pi * X_RAS)) + (Y_RAS**2 - 10 * np.cos(2 * np.pi * Y_RAS)) + 20
-     
-
-    # plt.figure(figsize= (12, 8), dpi = 80)
-    fig, ax1 = plt.subplots(nrows = 1, ncols = 1, figsize=(12, 8), dpi = 80)
-
-    # ax1.imshow(Z_RAS, interpolation='bilinear', extent = [-5.12, 5.12, -5.12, 5.12], origin = 'lower', cmap = mat.colormaps['YlOrBr'])
-    # ax1.title.set_text('Rastrigin-2D Function')
-
-    ax1.imshow(Z, interpolation='bilinear', 
-            extent = [funcData['xmin'], funcData['xmax'], funcData['ymin'], funcData['ymax']], 
-            origin = 'lower', 
-            cmap = mat.colormaps['YlOrBr'])
-    
-    rejectedPopulation = populationData['rejected']
-    selectedPopluation = populationData['selected']
-
-    rejectedPlotX = [ rejectedPopulation[i][0] for i in range(0, len(rejectedPopulation)) ] 
-    rejectedPlotY = [ rejectedPopulation[i][1] for i in range(0, len(rejectedPopulation)) ]
-
-    selectedPlotX = [ selectedPopluation[i][0] for i in range(0, len(selectedPopluation)) ] 
-    selectedPlotY = [ selectedPopluation[i][1] for i in range(0, len(selectedPopluation)) ]
-
-
-    ax1.scatter(x = rejectedPlotX, y = rejectedPlotY, c = '#2164b0', alpha = 0.6)
-    ax1.scatter(x = selectedPlotX, y = selectedPlotY, c = '#25ba6b', alpha = 0.6)
-    ax1.title.set_text(title)
-
-    fig.savefig(f'images/{prefix}/{genCount}.png')
-    plt.close(fig)
-
 
 def clamp(val, minval, maxval):
     return sorted((minval, val, maxval))[1]
@@ -107,12 +52,12 @@ class Population:
     def __init__(self, 
             popSize: int = 100, 
             orgList: t.List = [],              
-            fitness: t.Callable = lambda x: np.max(x) 
+            fitness: Function2D = None 
             ) -> None:
 
-        self.orgList : t.List = orgList 
-        self.popSize : int = popSize
-        self.fitFunc : t.Callable = fitness
+        self.orgList: t.List = orgList 
+        self.popSize: int = popSize
+        self.fitFunc: Function2D = fitness
     
     @classmethod
     def initFromRandomOrgs(cls,
@@ -139,7 +84,10 @@ class Population:
    
     def truncationSelection(self, topCount: int) -> (t.List, t.List):
         for o in self.orgList:
-            o.fitness = self.fitFunc(o.chromosome)
+            try:
+                o.fitness = self.fitFunc.evaluateSingle(o.chromosome)
+            except ValueOutOFRange:
+                o.fitness = np.finfo('float32').min
         
         s = sorted(self.orgList, key = lambda o : o.fitness)
         parents = s[:topCount] 
@@ -149,10 +97,10 @@ class Population:
     def updateOrgList(self, parentsList: t.List, childrenList: t.List):
         self.orgList = parentsList + childrenList
 
-    def getOrgs(self, *arg) -> t.List:
+    def getOrgs(self, *args) -> t.List:
         out = []
-        for a in arg:
-            out.append(self.orgList[a])
+        for arg in args:
+            out.append(self.orgList[arg])
            
         return out 
 
@@ -179,7 +127,7 @@ class GeneticAlgorithm():
                 'min': np.finfo('float32').min, 
                 'max': np.finfo('float32').max
                 }, 
-            fitness: t.Callable = lambda x: np.max(x), 
+            fitness: Function2D = None, 
             **kwargs,
             ) -> GeneticAlgorithm:
 
@@ -232,7 +180,7 @@ class DifferentialEvolution():
                 'min': np.finfo('float32').min, 
                 'max': np.finfo('float32').max
                 }, 
-            fitness: t.Callable = lambda x: np.max(x), **kwargs):
+            fitness: Function2D = None, **kwargs):
 
         p = Population.initFromRandomOrgs(popSize, orgData, fitness)  
 
@@ -267,31 +215,33 @@ class DifferentialEvolution():
                 else:
                     new[i] = x[i]
             
-            if(self.population.fitFunc(new) > self.population.fitFunc(x)):
+            try:
+                newfitness = self.population.fitFunc.evaluateSingle(new)
+            except ValueOutOFRange: 
+                newfitness = np.finfo('float32').min
+
+            try:
+                oldfitness = self.population.fitFunc.evaluateSingle(x) 
+            except ValueOutOFRange: 
+                oldfitness = np.finfo('float32').min
+
+            if(newfitness > oldfitness):
                 o.chromosome = new
 
 def GA():
+    sf = ShafferF62D(xshift = np.float32(30.0), yshift = np.float32(-30.0))
 
     ga = GeneticAlgorithm.initRandomPop(
             popSize = 100, 
             orgData = {'len': 2, 'min': -75.0, 'max': -50.0},
-            fitness = lambda c : shafferF62D(c[0], c[1], 30, -30),
+            fitness = sf,
             selectPer = 0.20,
             interpolFac = 0.5,
             mutationRate = 2.0
             )
-
-    funcData = {
-            'xmin': -100,
-            'xmax': +100,
-            'xiter': 500,
-            'ymin': -100,
-            'ymax': +100,
-            'yiter': 500,
-            'function': lambda x, y : shafferF62D(x, y, 30, -30)
-            }
-
-
+    
+    out1 = []
+    out2 = []
     for g in bar.tqdm(range(0, 100)):
         
         parents, rejected = ga.selection()
@@ -299,45 +249,39 @@ def GA():
         ga.mutation(children)
         ga.updateOrgList(parents, children)
         
-        selectedChrom = [p.chromosome for p in parents]
-        rejectedChrom = [r.chromosome for r in rejected]
+        out2.append([p.chromosome for p in parents])
+        out1.append([r.chromosome for r in rejected])
 
-        saveImage('fifth', g, 'Shaffer-2D',
-                {'selected': selectedChrom, 'rejected': rejectedChrom}, funcData)
-
+    fig, ax1 = plt.subplots(nrows = 1, ncols = 1, figsize=(12, 8), dpi = 80) 
+    dp = a.Datapoints.fromListCoords(out1, ax1) 
+    dp2 = a.Datapoints.fromListCoords(out2, ax1, colour='#25ba6b', alpha = 0.6) 
+    sa = a.ScatterAnimation(100, fig, [dp, dp2])
+    a.createFunctionAnimation(sf, ax1, './images/de2.gif', sa)
 
 
 def DE():
+    sf = ShafferF62D(xshift = np.float32(30.0), yshift = np.float32(-30.0))
+
     de = DifferentialEvolution.initRandomPop(
             popSize = 100, 
             orgData = {'len': 2, 'min': -75.0, 'max': -50.0},
-            fitness = lambda c : shafferF62D(c[0], c[1], 30, -30),
+            fitness = sf,
             p = 0.8, 
             w = 1.0)
-            
-
-    funcData = {
-            'xmin': -100,
-            'xmax': +100,
-            'xiter': 500,
-            'ymin': -100,
-            'ymax': +100,
-            'yiter': 500,
-            'function': lambda x, y : shafferF62D(x, y, 30, -30)
-            }
-
-
+    
+    out = []
     for g in bar.tqdm(range(0, 100)):
-        de.crossover(3)   
-       
-        selectedChrom = [p.chromosome for p in de.population.orgList]
+        de.crossover(3)        
+        out.append([p.chromosome for p in de.population.orgList])
 
-        saveImage('sixth', g, 'Shaffer-2D',
-                {'selected': selectedChrom, 'rejected': []}, funcData)
-
+    fig, ax1 = plt.subplots(nrows = 1, ncols = 1, figsize=(12, 8), dpi = 80) 
+    dp = a.Datapoints.fromListCoords(out, ax1) 
+    sa = a.ScatterAnimation(100, fig, [dp])
+    a.createFunctionAnimation(sf, ax1, './images/de1.gif', sa)
 
 
 if __name__ == '__main__':
     suppress_qt_warnings()
-    DE()
+    # DE()
+    GA()
 

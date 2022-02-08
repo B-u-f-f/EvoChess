@@ -49,6 +49,15 @@ class Function2D(ABC):
 
         return None 
 
+    def evaluateSingle(self, v: NDArray[np.float32]) -> np.float32:
+        axis: t.Union[None, str] = self._checkBounds(v[0], v[1])
+
+        if(axis is not None):
+            raise ValueOutOFRange(axis)
+
+        return self._func(v[0], v[1]) 
+
+
     def evaluate(self, x: NDArray[np.float32], y: NDArray[np.float32]) -> NDArray[np.float32]:
         axis: t.Union[None, str] = self._checkBounds(x, y)
 
@@ -56,9 +65,7 @@ class Function2D(ABC):
             raise ValueOutOFRange(axis)
 
         return self._func(x, y)
-
-
-    
+ 
     def show(self, ax = None) -> None:
         x: NDArray[np.float32] = np.linspace(self.xmin, self.xmax, self.xiter) 
         y: NDArray[np.float32] = np.linspace(self.ymin, self.ymax, self.yiter) 

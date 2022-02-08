@@ -17,27 +17,38 @@ class BadData(Exception):
 
 @dataclass
 class Datapoints:
-    xcoords: NDArray[np.float32] 
-    ycoords: NDArray[np.float32]
+    xcoords: t.List[NDArray[np.float32]] 
+    ycoords: t.List[NDArray[np.float32]]
     axis: mat.axis.Axis
     colour: str = '#2164b0'
     alpha: float = 0.6
 
 
     @classmethod
-    def fromTupleCoords(cls, l: t.List[t.Tuple[np.float32, np.float32]], 
+    def fromListCoords(cls, l: t.List[t.List[NDArray[np.float32]]], 
             axis: mat.axis.Axis, 
             colour: str ='#2164b0', 
             alpha: float = 0.6):
 
-        x: NDArray[np.float32] = np.full(len(l), 0.0, dtype='float32') 
-        y: NDArray[np.float32] = np.full(len(l), 0.0, dtype='float32') 
+        xcoords = []
+        ycoords = []
+        for li in l:
+            
+            n = len(li)
+            x = np.full(n, 0.0, dtype='float32')
+            y = np.full(n, 0.0, dtype='float32')
 
-        for i, (a, b) in enumerate(l):
-            x[i] = a 
-            y[i] = b
+            for j, (a, b) in enumerate(li):
+                x[j] = a
+                y[j] = b
+                
+            xcoords.append(x)
+            ycoords.append(y)
 
-        return cls(x, y, axis, colour, alpha)
+            
+
+        return cls(xcoords, ycoords, axis, colour, alpha)
+
 
 class ScatterAnimation:
     
