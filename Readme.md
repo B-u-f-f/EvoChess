@@ -30,3 +30,9 @@
 - [CMA-ES](https://arxiv.org/pdf/1604.00772.pdf)
 - [Bitboards](https://www.chessprogramming.org/Bitboards)
 
+
+### Bitboards
+- [Python chess](https://python-chess.readthedocs.io/en/v1.8.0/index.html)
+- [Bitboards book](https://books.google.co.in/books/about/How_to_Write_a_Bitboard_Chess_Engine.html?id=Z02XzQEACAAJ&source=kp_book_description&redir_esc=y)
+- [Article](https://www.codeproject.com/Articles/5313417/Worlds-Fastest-Bitboard-Chess-Movegenerator#_comments)
+
