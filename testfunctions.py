@@ -170,7 +170,7 @@ class Rastrigin2D(Function2D):
         x += self.xshift
         y += self.yshift
 
-        return (x**2 - 10.0 * np.cos(2.0 * np.pi * x)) + (y**2 - 10.0 * np.cos(2.0 * np.pi * y)) + 20.0
+        return ((x**2 - 10.0 * np.cos(2.0 * np.pi * x)) + (y**2 - 10.0 * np.cos(2.0 * np.pi * y)) + 20.0) * -1.0
 
 
 

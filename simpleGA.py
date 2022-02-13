@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import typing as t
 import tqdm as bar
 
-from testfunctions import ShafferF62D, Function2D, ValueOutOFRange 
+from testfunctions import ShafferF62D, Function2D, ValueOutOFRange, Rastrigin2D 
 import animations as a
 
 rng = np.random.default_rng()
@@ -260,11 +260,11 @@ def GA():
 
 
 def DE():
-    sf = ShafferF62D(xshift = np.float32(30.0), yshift = np.float32(-30.0))
+    sf =  Rastrigin2D(xshift = np.float32(00.0), yshift = np.float32(-00.0))
 
     de = DifferentialEvolution.initRandomPop(
             popSize = 100, 
-            orgData = {'len': 2, 'min': -75.0, 'max': -50.0},
+            orgData = {'len': 2, 'min': -5.12, 'max': +5.12},
             fitness = sf,
             p = 0.8, 
             w = 1.0)
@@ -282,6 +282,6 @@ def DE():
 
 if __name__ == '__main__':
     suppress_qt_warnings()
-    # DE()
-    GA()
+    DE()
+    # GA()
 

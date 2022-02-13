@@ -36,3 +36,9 @@
 - [Bitboards book](https://books.google.co.in/books/about/How_to_Write_a_Bitboard_Chess_Engine.html?id=Z02XzQEACAAJ&source=kp_book_description&redir_esc=y)
 - [Article](https://www.codeproject.com/Articles/5313417/Worlds-Fastest-Bitboard-Chess-Movegenerator#_comments)
 
+
+## CPP
+- https://api.csswg.org/bikeshed/?force=1&url=https://raw.githubusercontent.com/vector-of-bool/pitchfork/develop/data/spec.bs
+- https://lefticus.gitbooks.io/cpp-best-practices/content/02-Use_the_Tools_Available.html
+- https://github.com/cpp-best-practices/cpp_starter_project
+- https://github.com/friendlyanon/cmake-init
