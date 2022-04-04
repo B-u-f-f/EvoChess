@@ -2,7 +2,7 @@ import chess
 
 class EvalFunc:
     
-    def __init__(self, color) -> None:
+    def __init__(self) -> None:
         self.pieceValues = {
                 chess.PAWN: 1.0, 
                 chess.BISHOP: 3.0, 
@@ -12,8 +12,6 @@ class EvalFunc:
                 chess.KING: 100.0
                 }
 
-        self.color = color 
-
     def eval(self, board : chess.Board) -> float:
         eval_score = 0.0
         
@@ -22,8 +20,10 @@ class EvalFunc:
         
         # pieces -> Dict[chess.Square, chess.Piece]
         
+        color = not board.turn
+
         for piece in pieces.values():
-            if(piece.color == self.color):
+            if(piece.color == color):
                 eval_score += self.pieceValues[piece.piece_type]
             else:
                 eval_score -= self.pieceValues[piece.piece_type]
