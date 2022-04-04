@@ -23,7 +23,7 @@ class EvalFunc:
         # pieces -> Dict[chess.Square, chess.Piece]
         
         for piece in pieces.values():
-            if(i.color == self.color):
+            if(piece.color == self.color):
                 eval_score += self.pieceValues[piece.piece_type]
             else:
                 eval_score -= self.pieceValues[piece.piece_type]
