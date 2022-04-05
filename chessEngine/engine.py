@@ -22,5 +22,5 @@ class Engine:
 
 if __name__ == '__main__':
     e = Engine()
-    e.printeval('3k4/8/8/8/8/8/3Pn3/3K4 w - - 0 1');
+    e.printeval('8/8/2kn4/8/4n3/8/2BP3B/3K4 w - - 0 1');
 
