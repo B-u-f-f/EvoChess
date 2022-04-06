@@ -11,6 +11,8 @@ tqdm = "*"
 celluloid = "*"
 chess = "*"
 pygame = "*"
+ipykernel = "*"
+jupyter = "*"
 
 [dev-packages]
 
