@@ -46,19 +46,81 @@ class EvalFunc:
     def eval(self, board : chess.Board) -> float:
         eval_score = 0.0
         
-        # a dict of pieces currently on the board
-        pieces = board.piece_map()
         
-        # pieces -> Dict[chess.Square, chess.Piece]
-        
+        # pieces -> Dict[chess.Square, chess.Piece] 
         color = not board.turn
 
-        for piece in pieces.values():
-            if(piece.color == color):
-                eval_score += self.pieceValues[piece.piece_type]
-            else:
-                eval_score -= self.pieceValues[piece.piece_type]
-                
+        pDict = self._allPieces(board, color)
+        
+        val = 0
+        for k, v in pDict.items():
+            if(k == chess.PAWN):
+                val += v * self.pieceValues['pawnvalue']
+            elif(k == chess.BISHOP):
+                val += v * self.pieceValues['bishopvalue']
+            elif(k == chess.ROOK):
+                val += v * self.pieceValues['rookvalue']
+            elif(k == chess.KNIGHT):
+                val += v * self.pieceValues['knightvalue']
+            elif(k == chess.QUEEN):
+                val += v * self.pieceValues['queenvalue']
+
+
+        pDict = self._kingAttacked(board, color)
+        for k, v in pDict.items():
+            if(k == chess.PAWN):
+                val -= v * self.pieceValues['pawnvalue']
+            elif(k == chess.BISHOP):
+                val -= v * self.pieceValues['bishopvalue']
+            elif(k == chess.ROOK):
+                val -= v * self.pieceValues['rookvalue']
+            elif(k == chess.KNIGHT):
+                val -= v * self.pieceValues['knightvalue']
+            elif(k == chess.QUEEN):
+                val -= v * self.pieceValues['queenvalue']
+
+        pDict = self._kingDefended(board, color)
+        for k, v in pDict.items():
+            if(k == chess.PAWN):
+                val += v * self.pieceValues['pawnvalue']
+            elif(k == chess.BISHOP):
+                val += v * self.pieceValues['bishopvalue']
+            elif(k == chess.ROOK):
+                val += v * self.pieceValues['rookvalue']
+            elif(k == chess.KNIGHT):
+                val += v * self.pieceValues['knightvalue']
+            elif(k == chess.QUEEN):
+                val += v * self.pieceValues['queenvalue']
+
+
+
+        eval_score = \
+                self._centerpawnCount(board, color) * self.pieceValues['centerpawns'] \
+            +   self._kingPawnShield(board, color) * self.pieceValues['kingpawnshield'] \
+            +   self._bishopMob(board, color) * self.pieceValues['bishopmob'] \
+            +   self._bishopMob(board, color) * self.pieceValues['bishoponlarge'] \
+            +   self._bishopPair(board, color) * self.pieceValues['bishoppair'] \
+            +   self._knightMob(board, color) * self.pieceValues['knightmob'] \
+            +   self._knightSupport(board, color) * self.pieceValues['knightsupport'] \
+            +   self._knightPeriphery0(board, color) * self.pieceValues['knightperiphery0'] \
+            +   self._knightPeriphery1(board, color) * self.pieceValues['knightperiphery1'] \
+            +   self._knightPeriphery2(board, color) * self.pieceValues['knightperiphery2'] \
+            +   self._knightPeriphery3(board, color) * self.pieceValues['knightperiphery3'] \
+            +   self._isoPawn(board, color) * self.pieceValues['isopawn'] \
+            +   self._doubledPawn(board, color) * self.pieceValues['doublepawn'] \
+            +   self._passPawn(board, color) * self.pieceValues['passpawn'] \
+            +   self._rookBehindPassPawn(board, color) * self.pieceValues['rookbehindpawn'] \
+            +   self._backwardPawn(board, color) * self.pieceValues['backwardpawn'] \
+            +   self._blockPawn(board, color) * self.pieceValues['blockedpawn'] \
+            +   self._rookopenfile(board, color) * self.pieceValues['rookonopenfile'] \
+            +   self._rooksemiopenfile(board, color) * self.pieceValues['rookonsemiopen'] \
+            +   self._rookclosedfile(board, color) * self.pieceValues['rookonclosed'] \
+            +   self._rookOnSeventh(board, color) * self.pieceValues['rookonseventh'] \
+            +   self._rookMob(board, color) * self.pieceValues['rookmob'] \
+            +   self._queenMob(board, color) * self.pieceValues['queenmobility'] \
+            +   val
+
+               
         return eval_score
 
     def _centerpawnCount(self, board: chess.Board, color: chess.Color) -> int:
@@ -105,14 +167,22 @@ class EvalFunc:
         return count
 
 
-    def _kingAttacked(self, board: chess.Board, color: chess.Color) -> t.List[int]: 
+    def _kingAttacked(self, board: chess.Board, color: chess.Color) -> t.Dict[int, int]: 
         kposition : chess.Square = board.king(color)
         file : int = chess.square_file(kposition)
         rank : int = chess.square_rank(kposition)
  
         eneColor : chess.Color = not chess.Color
 
-        enePieces : t.List[int] = []
+        outdict = {
+                chess.PAWN: 0,
+                chess.BISHOP: 0,
+                chess.KNIGHT: 0,
+                chess.QUEEN: 0,
+                chess.ROOK: 0
+                }
+
+
 
         validRange = range(0, 8)
         for i in [-1, 0, 1]:
@@ -121,19 +191,24 @@ class EvalFunc:
                     pos = chess.square(file + i, rank + j)
                     piece = board.piece_at(pos)   
                     
-                    if(piece != None and piece.color == eneColor):
+                    if(piece != None and piece.color == eneColor and piece.piece_type != chess.KING):
+                        outdict[piece.piece_type] += 1
 
-                        enePieces.append(piece.piece_type)
-
-        return enePieces 
+        return outdict 
 
 
-    def _kingDefended(self, board: chess.Board, color: chess.Color) -> t.List[int]: 
+    def _kingDefended(self, board: chess.Board, color: chess.Color) -> t.Dict[int, int]: 
         kposition : chess.Square = board.king(color)
         file : int = chess.square_file(kposition)
         rank : int = chess.square_rank(kposition)
  
-        pieces : t.List[int] = []
+        outdict = {
+                chess.PAWN: 0,
+                chess.BISHOP: 0,
+                chess.KNIGHT: 0,
+                chess.QUEEN: 0,
+                chess.ROOK: 0
+                }
 
         validRange = range(0, 8)
         for i in [-1, 0, 1]:
@@ -143,9 +218,9 @@ class EvalFunc:
                     piece = board.piece_at(pos)   
                     
                     if(piece != None and piece.color == color and piece.piece_type != chess.KING):
-                        pieces.append(piece.piece_type)
+                        outdict[piece.piece_type] += 1
 
-        return pieces 
+        return outdict 
     
     def _kingCastled(self, board: chess.Board, color: chess.Color) -> bool:
         pass

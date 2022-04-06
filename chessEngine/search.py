@@ -1,6 +1,7 @@
 import chess
 import evalfuction as ef
 
+import tqdm
 from dataclasses import dataclass
 
 @dataclass
@@ -15,31 +16,49 @@ class NegaSearch:
 
 
     def search(self, board: chess.Board) -> EngineMove:
-        return NegaSearch.auxSearch(board, self.evaluation, self.maxDepth)
+        return NegaSearch.auxSearch(board, self.evaluation, self.maxDepth, float('-inf'), float('inf'))
 
     
     @staticmethod
-    def auxSearch(board: chess.Board, evaluation: ef.EvalFunc, depth: int) -> EngineMove:
+    def auxSearch(board: chess.Board, evaluation: ef.EvalFunc, depth: int, 
+            alpha: float, beta: float) -> EngineMove:
+         
+        bestMove = None
         
-        depth -= 1
-        
-        moves = []
+        move = None
+        if(not bool(board.legal_moves)):
+            if(board.is_checkmate()):
+                return EngineMove(None, -10000) 
+            
+            elif(board.is_stalemate()):
+                return EngineMove(None, 0)
 
         for move in board.legal_moves:
             
             board.push(move)
 
             if (depth != 0):
-                em = NegaSearch.auxSearch(board, evaluation, depth)
+                em = NegaSearch.auxSearch(board, evaluation, depth - 1, -beta, -alpha)
 
-                moves.append(EngineMove(move, -1.0 * em.eval))
+                move = EngineMove(move, -1.0 * em.eval)
             else:
-                moves.append(EngineMove(move, evaluation.eval(board)))
+                move = EngineMove(move, evaluation.eval(board))
             
-            print(board)
-            print(board.turn, " ", moves[-1].eval)
-
             board.pop()
-        
-        return max(moves, key = lambda em: em.eval)
 
+            
+            if(bestMove == None):
+                bestMove = move
+            elif(move.eval > bestMove.eval):
+                bestMove.eval = move.eval
+
+            print(board.turn, " ", bestMove.eval)
+            if(bestMove.eval >= alpha):
+                alpha = bestMove.eval
+
+            if(alpha >= beta):
+                return EngineMove(None, alpha) 
+
+
+        
+        return bestMove 
