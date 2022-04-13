@@ -2,10 +2,10 @@ import chess
 import evalfuction as ef
 import utility as u
 
-import uuid
-
 import random as r
 import typing as t
+from dataclasses import dataclass
+import enum
 
 class ZobristHash:
 
@@ -85,17 +85,16 @@ class ZobristHash:
 
         return key
 
-    def makeMove(self, board: chess.Board, move: chess.Move, key: int) -> int:
-        beforeCastleID: int = self._getCastleID(board)
+    def _getCastlingRightsAfterMoveHash(self, board: chess.Board, move: chess.Move) -> int:
+        beforeMoveCastleID: int = self._getCastleID(board)
         board.push(move)
-        afterCasterID: int = self._getCastleID(board)
+        afterMoveCastleID: int = self._getCastleID(board)
         board.pop()
-        key ^= self.castlingRightsHash[beforeCastleID] ^ self.castlingRightsHash[afterCasterID]
 
-        ## print(f'After castling {key}')
-            
-        ## piece move
-        # not a castling move
+        return self.castlingRightsHash[beforeMoveCastleID] ^ \
+        self.castlingRightsHash[afterMoveCastleID]
+
+    def _getPieceMoveHash(self, board: chess.Board, move: chess.Move) -> int:
         fromSquare: chess.Square = move.from_square
         toSquare: chess.Square = move.to_square
 
@@ -105,33 +104,61 @@ class ZobristHash:
         capturedPiece = board.piece_at(toSquare) 
 
         if(capturedPiece == None):
-            ## print(f'from {self.pieceSquareHash[(fromSquare, movedPiece.color, movedPiece.piece_type)]}')
-            ## print(f'to {self.pieceSquareHash[(toSquare, movedPiece.color, movedPiece.piece_type)]}')
+            return \
+               self.pieceSquareHash[(fromSquare, movedPiece.color, movedPiece.piece_type)]\
+            ^  self.pieceSquareHash[(toSquare, movedPiece.color, movedPiece.piece_type)] 
 
-            key ^= self.pieceSquareHash[(fromSquare, movedPiece.color, movedPiece.piece_type)]\
-                ^  self.pieceSquareHash[(toSquare, movedPiece.color, movedPiece.piece_type)] 
-
-        else:
-            key ^= self.pieceSquareHash[(fromSquare, movedPiece.color, movedPiece.piece_type)]\
-                ^  self.pieceSquareHash[(toSquare, movedPiece.color, movedPiece.piece_type)]\
-                ^  self.pieceSquareHash[(toSquare, capturedPiece.color, capturedPiece.piece_type)]
-        
-        ## turn
-        key ^=  self.blackTurnHash 
-
-        ## print(f'after turn {key} {self.blackTurnHash}')
-
-        ## en passant
+        return \
+           self.pieceSquareHash[(fromSquare, movedPiece.color, movedPiece.piece_type)]\
+        ^  self.pieceSquareHash[(toSquare, movedPiece.color, movedPiece.piece_type)]\
+        ^  self.pieceSquareHash[(toSquare, capturedPiece.color, capturedPiece.piece_type)]
+ 
+    def _getEnPassantFileHash(self, board: chess.Board, move: chess.Move) -> int:
         beforeEnPassantFiles = self._getEnPassantFiles(board)
         board.push(move)
         afterEnPassantFiles = self._getEnPassantFiles(board)
         board.pop()
 
+        finalHash = 0
         for f in (beforeEnPassantFiles + afterEnPassantFiles):
-            key ^= self.passantFileHash[f]
+            finalHash ^= self.passantFileHash[f]
+
+        return finalHash 
+
+    def makeMove(self, board: chess.Board, move: chess.Move, key: int) -> int:
+        key ^= self._getCastlingRightsAfterMoveHash(board, move) 
+        ## print(f'After castling {key}')
+            
+        ## piece move
+        key ^= self._getPieceMoveHash(board, move) 
+        
+        ## turn
+        key ^= self.blackTurnHash 
+        ## print(f'after turn {key} {self.blackTurnHash}')
+
+        ## en passant
+        key ^= self._getEnPassantFiles(board, move)
 
         ## print(f'after en passant {key}')
         return key
+
+    def hashOfPosition(self, board: chess.Board) -> int:
+        castlingHash: int = self.castlingRightsHash[self._getCastleID(board)] 
+
+        pieceMap: t.Dict[chess.Square, chess.Piece] =  board.piece_map()
+
+        piecePositionHash: int = 0
+        for s, p in pieceMap.items():
+
+            piecePositionHash ^= self.pieceSquareHash[(
+                s, p.color, p.piece_type 
+            )]
+
+        enPassantHash = 0
+        for f in self._getEnPassantFiles(board):
+            enPassantHash ^= self.passantFileHash[f]               
+
+        return castlingHash ^ piecePositionHash ^ enPassantHash 
     
     def _getEnPassantFiles(self, board: chess.Board) -> t.List[int]:
         legalMoves = board.legal_moves
@@ -157,6 +184,32 @@ class ZobristHash:
 
         self.randomNumbersUsed.append(num)
         return num 
+
+@enum.unique
+class NodeType(enum.Enum):
+    CUT_NODE = enum.auto()
+    ALL_NODE = enum.auto()
+    PV_NODE = enum.auto()
+
+@dataclass
+class TTEntry:
+    value: float 
+    depth: int
+    nodeType: NodeType
+
+
+class TranspositionTable:
+    def __init__(self) -> None:
+        self.table: t.Dict[int, TTEntry] = {}
+
+    def isInTable(self, hash:int) -> bool:
+        return hash in self.table
+
+    def add(self, hash: int, value: float, depth: int, nodeType: NodeType):
+        self.table[hash] = TTEntry(value = value, depth = depth, nodeType = nodeType)
+
+    def get(self, hash: int) -> t.Union[TTEntry, None]:
+        return self.table.get(hash, None) 
 
 class NegaSearch:
     def __init__(self, maxDepth: int, evaluation: ef.EvalFunc) -> None:
