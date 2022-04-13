@@ -6,7 +6,15 @@ import typing as t
 
 class EvalFunc:
     
-    def __init__(self) -> None:
+    def __init__(self,
+        value = {
+                chess.PAWN: 100,
+                chess.KNIGHT: 300,
+                chess.BISHOP: 300,
+                chess.ROOK: 500,
+                chess.QUEEN: 900
+                } ) -> None:
+
         self.pieceValues = {
                 'pawnvalue': 100,
                 'knightvalue': 342,
@@ -43,12 +51,58 @@ class EvalFunc:
                 'queenmobility': 3 
                 }
 
+        self.VALIDRANGE = range(8)
+        self.value = value
+
+    
+    def _setpieces(self, board: chess.Board) -> None:
+        self.pieceSquares = {
+                (chess.BLACK, chess.PAWN) : [],
+                (chess.BLACK, chess.ROOK) : [],
+                (chess.BLACK, chess.QUEEN) : [],
+                (chess.BLACK, chess.BISHOP) : [],
+                (chess.BLACK, chess.KNIGHT) : [],
+                (chess.BLACK, chess.KING) : [],
+
+                (chess.WHITE, chess.PAWN) : [],
+                (chess.WHITE, chess.ROOK) : [],
+                (chess.WHITE, chess.QUEEN) : [],
+                (chess.WHITE, chess.BISHOP) : [],
+                (chess.WHITE, chess.KNIGHT) : [],
+                (chess.WHITE, chess.KING) : [],
+                }
+
+
+        piecemap = board.piece_map()
+        
+        for s, p in piecemap.items():
+            self.pieceSquares[(p.color, p.piece_type)].append(s)
+    
+    def testEval(self, board: chess.Board) -> float:
+        self._setpieces(board)
+
+        eval_score = 0.0
+                
+        # pieces -> Dict[chess.Square, chess.Piece] 
+        color = board.turn
+        
+        for p in range(1, 6):
+            eval_score += len(self.pieceSquares[(color, p)]) * self.value[p] 
+
+        for p in range(1, 6):
+            eval_score -= len(self.pieceSquares[(not color, p)]) * self.value[p] 
+
+        
+        return eval_score
+
     def eval(self, board : chess.Board) -> float:
+        self._setpieces(board)
+
         eval_score = 0.0
         
         
         # pieces -> Dict[chess.Square, chess.Piece] 
-        color = not board.turn
+        color = board.turn
 
         pDict = self._allPieces(board, color)
         
@@ -153,10 +207,9 @@ class EvalFunc:
             
         count : int = 0
 
-        validRange = range(0, 8)
         for i in [-1, 0, 1]:
             for j in [-1, 0, 1]: 
-                if((file + i) in validRange and (rank + j) in validRange):
+                if((file + i) in self.VALIDRANGE and (rank + j) in self.VALIDRANGE):
                     pos = chess.square(file + i, rank + j)
                     piece = board.piece_at(pos)   
                     
@@ -184,10 +237,9 @@ class EvalFunc:
 
 
 
-        validRange = range(0, 8)
         for i in [-1, 0, 1]:
             for j in [-1, 0, 1]: 
-                if((file + i) in validRange and (rank + j) in validRange):
+                if((file + i) in self.VALIDRANGE and (rank + j) in self.VALIDRANGE):
                     pos = chess.square(file + i, rank + j)
                     piece = board.piece_at(pos)   
                     
@@ -210,10 +262,9 @@ class EvalFunc:
                 chess.ROOK: 0
                 }
 
-        validRange = range(0, 8)
         for i in [-1, 0, 1]:
             for j in [-1, 0, 1]: 
-                if((file + i) in validRange and (rank + j) in validRange):
+                if((file + i) in self.VALIDRANGE and (rank + j) in self.VALIDRANGE):
                     pos = chess.square(file + i, rank + j)
                     piece = board.piece_at(pos)   
                     
@@ -226,13 +277,9 @@ class EvalFunc:
         pass
 
     def _bishopMob(self, board: chess.Board, color: chess.Color) -> int:
-
-        pieceDict = board.piece_map()
-
         # finding the bishop squares
         bSquares: t.Dict[chess.Square, int] = {} 
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.BISHOP and p.color == color):
+        for s in self.pieceSquares[(color, chess.BISHOP)]:
                 bSquares[s] = 0
         
 
@@ -282,16 +329,14 @@ class EvalFunc:
             if(p.piece_type == chess.BISHOP and p.color == color):
                 count += 1
         
-        return 1 if count == 2 else 0
+        return 1 if len(self.pieceSquares[(color, chess.BISHOP)]) == 2 else 0
 
     def _knightMob(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
 
         # finding the bishop squares
         kSquares: t.Dict[chess.Square, int] = {} 
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.KNIGHT and p.color == color):
-                kSquares[s] = 0
+        for s in self.pieceSquares[(color, chess.KNIGHT)]:
+            kSquares[s] = 0
         
 
         for m in board.legal_moves:
@@ -302,13 +347,8 @@ class EvalFunc:
     
     # number of supported knights
     def _knightSupport(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        kSquares: t.List[chess.Square] = [] 
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.KNIGHT and p.color == color):
-                kSquares.append(s)
+        kSquares: t.List[chess.Square] = self.pieceSquares[(color, chess.KNIGHT)] 
         
-        validRange = range(8)
         count = 0
         for s in kSquares:
             file : int = chess.square_file(s)
@@ -317,7 +357,7 @@ class EvalFunc:
             rank += -1 if color else +1
 
             for f in [file-1, file+1]:
-                if(rank in validRange and f in validRange):
+                if(rank in self.VALIDRANGE and f in self.VALIDRANGE):
                     piece : chess.Piece = board.piece_at(chess.square(f, rank))
 
                     if(piece != None and piece.piece_type == chess.PAWN and piece.color == color):
@@ -421,14 +461,13 @@ class EvalFunc:
             file : int = chess.square_file(s)
             rank : int = chess.square_rank(s)
 
-            validRange = range(0, 8)
             flag = True
             for i in [-1, 0, 1]:
                 for j in [-1, 0, 1]: 
                     if(i == j == 0): 
                         continue
 
-                    if((file + i) in validRange and (rank + j) in validRange):
+                    if((file + i) in self.VALIDRANGE and (rank + j) in self.VALIDRANGE):
                         p = board.piece_at(chess.square(file + i, rank + j))
 
                         if(p != None and p.piece_type == chess.PAWN and p.color == color):
@@ -479,7 +518,6 @@ class EvalFunc:
         dir = +1 if color else -1
         lim = 7 if color else 0
         
-        validRange = range(8)
         count = 0
         for s in pSquares:
             file = chess.square_file(s)
@@ -491,9 +529,9 @@ class EvalFunc:
                 for j in [-1, 0, +1]:
                     f = file + j 
                     
-                    if(rank in validRange and f in validRange):
+                    if(rank in self.VALIDRANGE and f in self.VALIDRANGE):
                         
-                        if(f in validRange):
+                        if(f in self.VALIDRANGE):
                             sq = chess.square(f, rank)
 
                             piece = board.piece_at(sq)
@@ -522,7 +560,6 @@ class EvalFunc:
         dir = +1 if color else -1
         lim = 7 if color else 0
         
-        validRange = range(8)
         passedpawns = []
         for s in pSquares:
             file = chess.square_file(s)
@@ -534,9 +571,9 @@ class EvalFunc:
                 for j in [-1, 0, +1]:
                     f = file + j 
                     
-                    if(rank in validRange and f in validRange):
+                    if(rank in self.VALIDRANGE and f in self.VALIDRANGE):
                         
-                        if(f in validRange):
+                        if(f in self.VALIDRANGE):
                             sq = chess.square(f, rank)
 
                             piece = board.piece_at(sq)
@@ -584,7 +621,6 @@ class EvalFunc:
 
         beh = -1 if color else +1
         
-        validRange = range(8)
         count = 0
         for p in pSquares:
             file = chess.square_file(p)
@@ -595,7 +631,7 @@ class EvalFunc:
             
             isPawn1 = False
             for i in [-1, 0, +1]:
-                if(behRank in validRange and (file + i) in validRange):
+                if(behRank in self.VALIDRANGE and (file + i) in self.VALIDRANGE):
                     sq = chess.square(file + i, behRank)
                     piece = board.piece_at(sq)
 
@@ -605,7 +641,7 @@ class EvalFunc:
 
             isPawn2 = False
             for i in [-1, 0, +1]:
-                if(forRank in validRange and (file + i) in validRange):
+                if(forRank in self.VALIDRANGE and (file + i) in self.VALIDRANGE):
                     sq = chess.square(file + i, forRank)
                     piece = board.piece_at(sq)
 
@@ -881,7 +917,7 @@ class EvalFuncTest(unittest.TestCase):
 
     def testBishopMob(self):
         b = chess.Board('3k4/8/8/4PB2/2PK4/3RP3/1B6/8 w - - 0 1')
-
+        self.ef._setpieces(b)
         mob = self.ef._bishopMob(b, chess.WHITE)
         self.assertEqual(mob, 12)
 

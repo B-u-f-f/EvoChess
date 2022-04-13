@@ -13,6 +13,8 @@ chess = "*"
 pygame = "*"
 ipykernel = "*"
 jupyter = "*"
+sklearn = "*"
+pandas = "*"
 
 [dev-packages]
 
