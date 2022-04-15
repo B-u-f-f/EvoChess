@@ -4,7 +4,7 @@ import utility as u
 
 import random as r
 import typing as t
-from dataclasses import dataclass
+from dataclasses import dataclass 
 import enum
 
 class ZobristHash:
@@ -222,6 +222,73 @@ class TranspositionTable:
     def get(self, hash: int) -> t.Union[TTEntry, None]:
         return self.table.get(hash, None) 
 
+class MoveOrdering:
+    
+    def __init__(self) -> None:
+        self.CAPTURED_PIECE_MULTIPLIER = 10
+        self.KILLERMOVE_BONUS = 50
+        self.KILLERMOVES_COUNT = 2
+        self.killerMoves : t.Dict[int, t.List[chess.Move]] = {}
+
+    def _capturedPieceBonus(self, board: chess.Board, move: chess.Move) -> t.Tuple[int, bool]:
+        pieceValues: t.Dict[int, int] = {
+            chess.PAWN: 1,
+            chess.KNIGHT: 3, 
+            chess.BISHOP: 3,
+            chess.ROOK: 5,
+            chess.QUEEN: 9,
+            chess.KING: 1
+        }
+
+
+        fromSquare: chess.Square = move.from_square
+        toSquare: chess.Square = move.to_square
+
+        movedPiece = board.piece_at(fromSquare)
+        capturedPiece = board.piece_at(toSquare)
+
+        if(capturedPiece == None):
+            return 0, False
+
+        return self.CAPTURED_PIECE_MULTIPLIER \
+        * pieceValues[capturedPiece.piece_type] \
+        - pieceValues[movedPiece.piece_type], True
+
+    def _killerMoveBonus(self, depth: int, move: chess.Move):
+        if (depth in self.killerMoves and move in self.killerMoves[depth]):
+            # print(f'Bonus for {move} at depth {depth}')
+            return self.KILLERMOVE_BONUS
+
+        return 0 
+
+    def orderMoves(self, board: chess.Board, depth: int) -> t.List[chess.Move]:
+        moves = []
+
+        for move in board.legal_moves:
+            priority: int = 0
+
+            # capture priority increase
+            bonus, isCapture = self._capturedPieceBonus(board, move) 
+            priority += bonus 
+
+            if(not isCapture):
+                priority += self._killerMoveBonus(depth, move)
+
+            moves.append((priority, move))
+
+        moves = sorted(moves, key = lambda k: k[0], reverse = True)
+        return moves 
+
+    def addKillerMove(self, move: chess.Move, depth: int) -> None:
+        if(depth in self.killerMoves):
+            self.killerMoves[depth].insert(0, move)
+
+            if(len(self.killerMoves[depth]) > self.KILLERMOVES_COUNT):
+                self.killerMoves[depth].pop()
+
+        else:
+            self.killerMoves[depth] = [move]
+        
 class NegaSearch:
     def __init__(self, maxDepth: int, evaluation: ef.EvalFunc) -> None:
         self.maxDepth: int = maxDepth
@@ -229,6 +296,7 @@ class NegaSearch:
 
         self.tt: TranspositionTable = TranspositionTable()
         self.hashFunc = ZobristHash()
+        self.ordering = MoveOrdering()
 
     def search(self, board: chess.Board) -> None:
         self.bestMove = None
@@ -285,8 +353,10 @@ class NegaSearch:
         bestMove = None
         moveEval = float('-inf')
         bestEval = float('-inf')
-        for move in board.legal_moves:
 
+        orderedMoves: t.List[chess.Move] = self.ordering.orderMoves(board, self.maxDepth - depth)
+
+        for p, move in orderedMoves:
             if(depth == self.maxDepth):
                 print(move)
 
@@ -305,6 +375,7 @@ class NegaSearch:
             if bestEval > beta:
                 newEntry.nodeType = NodeType.CUT_NODE 
                 self.tt.add(hash, newEntry)
+                self.ordering.addKillerMove(move, self.maxDepth - depth)
 
                 return bestEval
             
