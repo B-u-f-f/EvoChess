@@ -137,28 +137,33 @@ class ZobristHash:
         ## print(f'after turn {key} {self.blackTurnHash}')
 
         ## en passant
-        key ^= self._getEnPassantFiles(board, move)
+        key ^= self._getEnPassantFileHash(board, move)
 
         ## print(f'after en passant {key}')
         return key
 
     def hashOfPosition(self, board: chess.Board) -> int:
+        # castling
         castlingHash: int = self.castlingRightsHash[self._getCastleID(board)] 
 
+        # piece position
         pieceMap: t.Dict[chess.Square, chess.Piece] =  board.piece_map()
-
         piecePositionHash: int = 0
         for s, p in pieceMap.items():
 
             piecePositionHash ^= self.pieceSquareHash[(
                 s, p.color, p.piece_type 
             )]
+        
+        # turn
+        blackTurnHash = self.blackTurnHash if board.turn == chess.BLACK else 0
 
+        # en passant files
         enPassantHash = 0
         for f in self._getEnPassantFiles(board):
             enPassantHash ^= self.passantFileHash[f]               
 
-        return castlingHash ^ piecePositionHash ^ enPassantHash 
+        return castlingHash ^ piecePositionHash ^ enPassantHash ^ blackTurnHash 
     
     def _getEnPassantFiles(self, board: chess.Board) -> t.List[int]:
         legalMoves = board.legal_moves
@@ -196,6 +201,7 @@ class TTEntry:
     value: float 
     depth: int
     nodeType: NodeType
+    fen: str
 
 
 class TranspositionTable:
@@ -208,6 +214,11 @@ class TranspositionTable:
     def add(self, hash: int, value: float, depth: int, nodeType: NodeType):
         self.table[hash] = TTEntry(value = value, depth = depth, nodeType = nodeType)
 
+    def add(self, hash: int, entry: TTEntry):
+        self.table[hash] = entry 
+
+
+
     def get(self, hash: int) -> t.Union[TTEntry, None]:
         return self.table.get(hash, None) 
 
@@ -216,45 +227,93 @@ class NegaSearch:
         self.maxDepth: int = maxDepth
         self.evaluation: ef.EvalFunc = evaluation
 
+        self.tt: TranspositionTable = TranspositionTable()
+        self.hashFunc = ZobristHash()
 
     def search(self, board: chess.Board) -> None:
         self.bestMove = None
-        self.auxSearch(board, self.evaluation, self.maxDepth, float('-inf'), float('inf'))
 
-    
-    def auxSearch(self, board: chess.Board, evaluation: ef.EvalFunc, depth: int, 
-            alpha: float, beta: float) -> float:
-        
+        initalHash = self.hashFunc.hashOfPosition(board)
+
+        self.auxSearch(board, self.evaluation, self.maxDepth, 
+        initalHash, float('-inf'), float('inf'))
+ 
+    def auxSearch(self, board: chess.Board, evaluation: ef.EvalFunc, 
+    depth: int, hash: int,  alpha: float, beta: float) -> float:
+
+        # Checking the transposition table
+        entry: t.Union[TTEntry, None] = self.tt.get(hash) 
+        if(entry != None):
+            # if (entry.fen != board.fen()):
+            #     print(f'TT hit: entry fen: {entry.fen}, board fen: {board.fen()}')
+            #     print(f'TT hit: hash: {self.hashFunc.hashOfPosition(board)}, hash: {hash}')
+
+            if(entry.depth >= depth):
+
+                value: float = entry.value
+
+                if(entry.nodeType == NodeType.PV_NODE):
+                    return value
+
+                if(entry.nodeType == NodeType.ALL_NODE):
+                    if(value <= alpha):
+                        return alpha
+
+                    if(value < beta):
+                        beta = value
+
+                if(entry.nodeType == NodeType.CUT_NODE):
+                    if(beta <= value):
+                        return value
+
+                    if(alpha < value):
+                        alpha = value
+
+        # Reached the leaf node
         if(depth == 0):
             return evaluation.testEval(board)
 
+        # checkmate or stalemate
         if(board.legal_moves.count() == 0):
             if(board.is_checkmate()):
                 return float('inf') if board.outcome().winner == board.turn else float('-inf') 
             
             return 0.0
 
-        
+        # search 
+        newEntry: TTEntry = TTEntry(0.0, self.maxDepth - depth, NodeType.PV_NODE, board.fen())
         bestMove = None
         moveEval = float('-inf')
         bestEval = float('-inf')
         for move in board.legal_moves:
+
             if(depth == self.maxDepth):
                 print(move)
-            
+
+            # new hash            
+            newHash = self.hashFunc.makeMove(board, move, hash)
+
             board.push(move)
-            moveEval = -self.auxSearch(board, evaluation, depth - 1, -beta, -alpha) 
+            moveEval = -self.auxSearch(board, evaluation, depth - 1, newHash, -beta, -alpha) 
             board.pop()
 
+            newEntry.value = moveEval
             if(moveEval > bestEval):
                 bestEval = moveEval
                 bestMove = move
 
             if bestEval > beta:
+                newEntry.nodeType = NodeType.CUT_NODE 
+                self.tt.add(hash, newEntry)
+
                 return bestEval
             
-            alpha = max(alpha, bestEval)
+            alpha = max(alpha, bestEval) 
 
+
+        if(alpha > bestEval):
+            newEntry.nodeType = NodeType.ALL_NODE
+        self.tt.add(hash, newEntry)
  
         if(depth == self.maxDepth):
             self.bestMove = bestMove

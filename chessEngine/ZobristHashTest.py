@@ -1,3 +1,4 @@
+from re import M
 import unittest
 import chess
 from search import ZobristHash
@@ -38,6 +39,18 @@ class ZobristHashTest(unittest.TestCase):
         h2 = self.z.hashOfPosition(withoutEnPassant)
 
         self.assertNotEqual(h1, h2)
+
+    def testMakeMove(self):
+        orgpos = chess.Board('2r2krR/1bn1qp2/p3p3/1p1pP3/3N1QP1/8/PPP3BP/3R2K1 w - - 3 30')
+        move = chess.Move.from_uci('h8g8') 
+        h1 = self.z.hashOfPosition(orgpos)
+        h2 = self.z.makeMove(orgpos, move, h1)
+        orgpos.push(move)
+        h3 = self.z.hashOfPosition(orgpos)
+
+        print(h1, h2)
+        self.assertNotEqual(h1, h2)
+        self.assertEqual(h2, h3)
 
 
 if __name__ == '__main__':
