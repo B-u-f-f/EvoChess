@@ -18,11 +18,17 @@ class Engine:
         board = chess.Board(fen)
         
         print(board)
-        self.ns.search(board)
-        print(board.san(self.ns.bestMove))
-        board.push(self.ns.bestMove)
-        print("\n")
-        print(board)
+        moves = self.ns.search(board)
+
+        # if (self.ns.bestMove != None):
+        #     print(board.san(self.ns.bestMove))
+        #     board.push(self.ns.bestMove)
+        #     print("\n")
+        #     print(board)
+        # else:
+        #     print("WTF")
+
+        print(moves)
     
     def findmoves(self, fens):
         out = []

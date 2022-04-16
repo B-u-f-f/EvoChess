@@ -303,11 +303,17 @@ class NegaSearch:
 
         initalHash = self.hashFunc.hashOfPosition(board)
 
+        line: t.List[chess.Move] = []
+
         self.auxSearch(board, self.evaluation, self.maxDepth, 
-        initalHash, float('-inf'), float('inf'))
+        initalHash, float('-inf'), float('inf'), line)
+
+        return line
  
     def auxSearch(self, board: chess.Board, evaluation: ef.EvalFunc, 
-    depth: int, hash: int,  alpha: float, beta: float) -> float:
+    depth: int, hash: int,  alpha: float, beta: float, pline: t.List[chess.Move]) -> float:
+
+        line: t.List[chess.Move] = []
 
         # Checking the transposition table
         entry: t.Union[TTEntry, None] = self.tt.get(hash) 
@@ -351,31 +357,43 @@ class NegaSearch:
         # search 
         newEntry: TTEntry = TTEntry(0.0, self.maxDepth - depth, NodeType.PV_NODE, board.fen())
         bestMove = None
-        moveEval = float('-inf')
         bestEval = float('-inf')
 
         orderedMoves: t.List[chess.Move] = self.ordering.orderMoves(board, self.maxDepth - depth)
 
-        for p, move in orderedMoves:
+        for _, move in orderedMoves:
             if(depth == self.maxDepth):
                 print(move)
 
             # new hash            
+            # print(orderedMoves, "hobo bobo: \n", list(board.legal_moves))
             newHash = self.hashFunc.makeMove(board, move, hash)
 
             board.push(move)
-            moveEval = -self.auxSearch(board, evaluation, depth - 1, newHash, -beta, -alpha) 
+            value = -self.auxSearch(board, evaluation, depth - 1, newHash, -alpha, -alpha, line) 
             board.pop()
 
-            newEntry.value = moveEval
-            if(moveEval > bestEval):
-                bestEval = moveEval
-                bestMove = move
+            if(value < bestEval):
+                continue
+            
+            if(value < beta and depth > 2):
+                board.push(move)
+                value = -self.auxSearch(board, evaluation, depth - 1, newHash, -beta, -value, line) 
+                board.pop()
 
-            if bestEval > beta:
+            newEntry.value = value
+            if(value > bestEval):
+                bestEval = value
+                bestMove = move
+                pline[:] = [move] + line
+
+            if bestEval >= beta:
                 newEntry.nodeType = NodeType.CUT_NODE 
                 self.tt.add(hash, newEntry)
                 self.ordering.addKillerMove(move, self.maxDepth - depth)
+
+                if(depth == self.maxDepth):
+                    self.bestMove = bestMove
 
                 return bestEval
             
@@ -384,6 +402,7 @@ class NegaSearch:
 
         if(alpha > bestEval):
             newEntry.nodeType = NodeType.ALL_NODE
+
         self.tt.add(hash, newEntry)
  
         if(depth == self.maxDepth):
