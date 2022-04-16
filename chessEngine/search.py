@@ -1,3 +1,4 @@
+from lib2to3.pytree import Node
 import chess
 import evalfuction as ef
 import utility as u
@@ -192,9 +193,9 @@ class ZobristHash:
 
 @enum.unique
 class NodeType(enum.Enum):
-    CUT_NODE = enum.auto()
-    ALL_NODE = enum.auto()
-    PV_NODE = enum.auto()
+    UPPERBOUND = enum.auto()
+    LOWERBOUND = enum.auto()
+    EXACT = enum.auto()
 
 @dataclass
 class TTEntry:
@@ -302,46 +303,37 @@ class NegaSearch:
         initalHash = self.hashFunc.hashOfPosition(board)
         line: t.List[chess.Move] = []
 
-        self.auxSearch(board, self.evaluation, self.maxDepth, 
-        initalHash, line)
+        self.auxSearch(board, self.maxDepth, initalHash, line)
 
         return line
  
-    def auxSearch(self, board: chess.Board, evaluation: ef.EvalFunc, 
+    def auxSearch(self, board: chess.Board, 
     depth: int, hash: int, pline: t.List[chess.Move], 
     alpha: float = float('-inf'), beta: float = float('inf')) -> float:
 
+        alphaOrg: float = alpha
         # Checking the transposition table
         entry: t.Union[TTEntry, None] = self.tt.get(hash) 
-        if(entry != None):
-            if(entry.depth >= depth):
+        if(entry != None and (entry.depth >= depth)):
 
-                value: float = entry.value
+            value: float = entry.value
 
-                if(entry.nodeType == NodeType.PV_NODE):
-                    pline[:] = entry.line
+            if(entry.nodeType == NodeType.EXACT):
+                pline[:] = entry.line
+                return value
+            elif (entry.nodeType == NodeType.LOWERBOUND):
+                alpha = max(alpha, value)
+            elif (entry.nodeType == NodeType.UPPERBOUND):
+                beta = min(beta, value)
 
-                    return value
+            if(alpha >= beta):
+                pline[:] = entry.line
+                return value
 
-                if(entry.nodeType == NodeType.ALL_NODE):
-                    if(value <= alpha):
-                        pline[:] = entry.line
-                        return value 
-
-                    if(value < beta):
-                        beta = value
-
-                if(entry.nodeType == NodeType.CUT_NODE):
-                    if(beta <= value):
-                        pline[:] = entry.line
-                        return value
-
-                    if(alpha < value):
-                        alpha = value
 
         # Reached the leaf node
         if(depth == 0):
-            return evaluation.testEval(board)
+            return self.evaluation.testEval(board)
 
         # checkmate or stalemate
         if(board.legal_moves.count() == 0):
@@ -351,12 +343,14 @@ class NegaSearch:
             return 0.0
 
         # search 
-        newEntry: TTEntry = TTEntry(float('-inf'), depth, NodeType.PV_NODE, [])
+        newEntry: TTEntry = TTEntry(float('-inf'), depth, NodeType.EXACT, [])
         bestEval = float('-inf')
 
 
         orderedMoves: t.List[chess.Move] = self.ordering.orderMoves(board, depth)
-        for _, move in orderedMoves:
+        for i in range(0, len(orderedMoves)):
+            move = orderedMoves[i][1]
+
             line: t.List[chess.Move] = []
 
 
@@ -364,36 +358,50 @@ class NegaSearch:
             #     print(move)
             
             newHash = self.hashFunc.makeMove(board, move, hash)
-           
-            board.push(move)
-            value = -self.auxSearch(board, evaluation, depth - 1, newHash, line, -beta, -alpha) 
-            board.pop()
 
-            if(value > bestEval):
-                bestEval = value
-                newEntry.value = bestEval
-                pline[:] = [(move, bestEval)] + line
+            value = float('-inf')
+            if(i == 0):
+                board.push(move)
+                value = -self.auxSearch(board, depth - 1, newHash, line, -beta, -alpha) 
+                board.pop()
+            else:
+                board.push(move)
+                value = -self.auxSearch(board, depth - 1, newHash, line, -alpha - 1, -alpha) 
+                board.pop()
 
-            if bestEval > beta:
-                newEntry.nodeType = NodeType.CUT_NODE 
-                newEntry.line = pline
+                if(alpha < value < beta):
+                    board.push(move)
+                    value = -self.auxSearch(board, depth - 1, newHash, line, -beta, -value) 
+                    board.pop()
 
-                self.tt.add(hash, newEntry)
-                self.ordering.addKillerMove(move, depth)
-
-                return bestEval
+            # if(value > bestEval):
+            #     bestEval = value
+            #     pline[:] = [(move, bestEval)] + line
             
-            alpha = max(alpha, bestEval) 
+            # alpha = max(alpha, bestEval) 
+
+            if(value > alpha):
+                alpha = value
+                pline[:] = [(move, alpha)] + line
+            # alpha = max(alpha, value)
+
+            if(alpha >= beta):
+                break
 
             if(depth == self.maxDepth):
-                print(move, " ", value, " ", [(move, bestEval)] + line)
+                print(move, " ", value, " ", [(move, alpha)] + line)
 
+        newEntry.value = alpha 
 
-        if(alpha > bestEval):
-            newEntry.nodeType = NodeType.ALL_NODE
+        if(alpha <= alphaOrg):
+            newEntry.nodeType = NodeType.UPPERBOUND
+        elif (alpha >= beta):
+            newEntry.nodeType = NodeType.LOWERBOUND
+        else:
+            newEntry.nodeType = NodeType.EXACT
 
         newEntry.line[:] = pline
 
         self.tt.add(hash, newEntry)
 
-        return bestEval 
+        return alpha 
