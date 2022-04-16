@@ -20,13 +20,10 @@ class Engine:
         print(board)
         moves = self.ns.search(board)
 
-        # if (self.ns.bestMove != None):
-        #     print(board.san(self.ns.bestMove))
-        #     board.push(self.ns.bestMove)
-        #     print("\n")
-        #     print(board)
-        # else:
-        #     print("WTF")
+        for m, e in moves:
+            print(f'Move: {board.san(m)}, eval: {e}')
+            board.push(m)
+            print(f'board:\n{board}')
 
         print(moves)
     

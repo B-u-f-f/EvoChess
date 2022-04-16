@@ -1168,6 +1168,22 @@ class EvalFuncTest(unittest.TestCase):
             chess.PAWN: 4
             })
 
+    def testTestEvaluation(self):
+        b = chess.Board('3k4/2q5/8/8/8/8/8/3K4 w - - 0 1')
+        v = self.ef.testEval(b)
+
+        self.assertEqual(v, -900)
+        b = chess.Board('3k4/2q5/8/8/8/8/2Q1N3/3K4 w - - 0 1')
+        v = self.ef.testEval(b)
+        self.assertEqual(v, 300)
+        
+        b = chess.Board('3k4/2q5/8/8/8/8/8/3K4 b - - 0 1')
+        v = self.ef.testEval(b)
+
+        self.assertEqual(v, 900)
+        b = chess.Board('3k4/2q5/8/8/8/8/2Q1N3/3K4 b - - 0 1')
+        v = self.ef.testEval(b)
+        self.assertEqual(v, -300)
 
 if __name__ == '__main__':
     unittest.main()

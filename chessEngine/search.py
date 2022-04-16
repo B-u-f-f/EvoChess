@@ -201,7 +201,7 @@ class TTEntry:
     value: float 
     depth: int
     nodeType: NodeType
-    fen: str
+    line: t.List[chess.Move]
 
 
 class TranspositionTable:
@@ -299,45 +299,41 @@ class NegaSearch:
         self.ordering = MoveOrdering()
 
     def search(self, board: chess.Board) -> None:
-        self.bestMove = None
-
         initalHash = self.hashFunc.hashOfPosition(board)
-
         line: t.List[chess.Move] = []
 
         self.auxSearch(board, self.evaluation, self.maxDepth, 
-        initalHash, float('-inf'), float('inf'), line)
+        initalHash, line)
 
         return line
  
     def auxSearch(self, board: chess.Board, evaluation: ef.EvalFunc, 
-    depth: int, hash: int,  alpha: float, beta: float, pline: t.List[chess.Move]) -> float:
-
-        line: t.List[chess.Move] = []
+    depth: int, hash: int, pline: t.List[chess.Move], 
+    alpha: float = float('-inf'), beta: float = float('inf')) -> float:
 
         # Checking the transposition table
         entry: t.Union[TTEntry, None] = self.tt.get(hash) 
         if(entry != None):
-            # if (entry.fen != board.fen()):
-            #     print(f'TT hit: entry fen: {entry.fen}, board fen: {board.fen()}')
-            #     print(f'TT hit: hash: {self.hashFunc.hashOfPosition(board)}, hash: {hash}')
-
             if(entry.depth >= depth):
 
                 value: float = entry.value
 
                 if(entry.nodeType == NodeType.PV_NODE):
+                    pline[:] = entry.line
+
                     return value
 
                 if(entry.nodeType == NodeType.ALL_NODE):
                     if(value <= alpha):
-                        return alpha
+                        pline[:] = entry.line
+                        return value 
 
                     if(value < beta):
                         beta = value
 
                 if(entry.nodeType == NodeType.CUT_NODE):
                     if(beta <= value):
+                        pline[:] = entry.line
                         return value
 
                     if(alpha < value):
@@ -350,81 +346,54 @@ class NegaSearch:
         # checkmate or stalemate
         if(board.legal_moves.count() == 0):
             if(board.is_checkmate()):
-                return float('inf') if board.outcome().winner == board.turn else float('-inf') 
-            
+                return u.FLOAT_MAX if board.outcome().winner == board.turn else -u.FLOAT_MAX
+ 
             return 0.0
 
         # search 
-        newEntry: TTEntry = TTEntry(0.0, self.maxDepth - depth, NodeType.PV_NODE, board.fen())
-        bestMove = None
+        newEntry: TTEntry = TTEntry(float('-inf'), depth, NodeType.PV_NODE, [])
         bestEval = float('-inf')
 
-        orderedMoves: t.List[chess.Move] = self.ordering.orderMoves(board, self.maxDepth - depth)
 
+        orderedMoves: t.List[chess.Move] = self.ordering.orderMoves(board, depth)
         for _, move in orderedMoves:
-            if(depth == self.maxDepth):
-                print(move)
+            line: t.List[chess.Move] = []
 
-            # new hash            
-            # print(orderedMoves, "hobo bobo: \n", list(board.legal_moves))
+
+            # if(depth == self.maxDepth):
+            #     print(move)
+            
             newHash = self.hashFunc.makeMove(board, move, hash)
-
+           
             board.push(move)
-            value = -self.auxSearch(board, evaluation, depth - 1, newHash, -alpha, -alpha, line) 
+            value = -self.auxSearch(board, evaluation, depth - 1, newHash, line, -beta, -alpha) 
             board.pop()
 
-            if(value < bestEval):
-                continue
-            
-            if(value < beta and depth > 2):
-                board.push(move)
-                value = -self.auxSearch(board, evaluation, depth - 1, newHash, -beta, -value, line) 
-                board.pop()
-
-            newEntry.value = value
             if(value > bestEval):
                 bestEval = value
-                bestMove = move
-                pline[:] = [move] + line
+                newEntry.value = bestEval
+                pline[:] = [(move, bestEval)] + line
 
-            if bestEval >= beta:
+            if bestEval > beta:
                 newEntry.nodeType = NodeType.CUT_NODE 
-                self.tt.add(hash, newEntry)
-                self.ordering.addKillerMove(move, self.maxDepth - depth)
+                newEntry.line = pline
 
-                if(depth == self.maxDepth):
-                    self.bestMove = bestMove
+                self.tt.add(hash, newEntry)
+                self.ordering.addKillerMove(move, depth)
 
                 return bestEval
             
             alpha = max(alpha, bestEval) 
 
+            if(depth == self.maxDepth):
+                print(move, " ", value, " ", [(move, bestEval)] + line)
+
 
         if(alpha > bestEval):
             newEntry.nodeType = NodeType.ALL_NODE
 
+        newEntry.line[:] = pline
+
         self.tt.add(hash, newEntry)
- 
-        if(depth == self.maxDepth):
-            self.bestMove = bestMove
 
         return bestEval 
-
-
-if __name__ == '__main__':
-    b = chess.Board()
-    m = chess.Move.from_uci('e2e4')
-    m2 = chess.Move.from_uci('d2d4')
-
-    z = ZobristHash()
-    i = z.getInitalZobristKey()
-    print(i, m)
-    print(b)
-    h1 = z.getZobristHashKey(b, m, i)
-    print("next")
-    print(i, m2)
-    print(b)
-    h2 = z.getZobristHashKey(b, m2, i)
-
-
-    print(i, h1, h2, h1 == h2)
