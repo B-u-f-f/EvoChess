@@ -86,7 +86,11 @@ class ZobristHash:
 
         return key
 
-    def _getCastlingRightsAfterMoveHash(self, board: chess.Board, move: chess.Move) -> int:
+    def _getCastlingRightsAfterMoveHash(self, 
+        board: chess.Board, 
+        move: chess.Move
+        ) -> int:
+
         beforeMoveCastleID: int = self._getCastleID(board)
         board.push(move)
         afterMoveCastleID: int = self._getCastleID(board)
@@ -227,12 +231,19 @@ class TranspositionTable:
 class MoveOrdering:
     
     def __init__(self) -> None:
-        self.CAPTURED_PIECE_MULTIPLIER = 10
-        self.KILLERMOVE_BONUS = 100
-        self.KILLERMOVES_COUNT = 3
+        self.CAPTURED_PIECE_MULTIPLIER: int = 10
+        self.KILLERMOVE_BONUS: int          = 100
+        self.BESTOVE_BONUS: int             = 200
+        self.KILLERMOVES_COUNT: int         = 3
+
+        self.bestMove : chess.Move = None
         self.killerMoves : t.Dict[int, t.List[chess.Move]] = {}
 
-    def _capturedPieceBonus(self, board: chess.Board, move: chess.Move) -> t.Tuple[int, bool]:
+    def _capturedPieceBonus(self, 
+        board: chess.Board, 
+        move: chess.Move
+        ) -> t.Tuple[int, bool]:
+
         pieceValues: t.Dict[int, int] = {
             chess.PAWN: 1,
             chess.KNIGHT: 3, 
@@ -276,10 +287,16 @@ class MoveOrdering:
             if(not isCapture):
                 priority += self._killerMoveBonus(depth, move)
 
+            # if(move == self.bestMove):
+            #     priority += self.BESTOVE_BONUS
+
             moves.append((priority, move))
 
         moves = sorted(moves, key = lambda k: k[0], reverse = True)
         return moves 
+
+    def setBestMove(self, move: chess.Move) -> None:
+        self.bestMove = move
 
     def addKillerMove(self, move: chess.Move, depth: int) -> None:
         if(depth in self.killerMoves):
@@ -304,6 +321,13 @@ class NegaSearch:
     def search(self, board: chess.Board) -> None:
         initalHash = self.hashFunc.hashOfPosition(board)
         line: t.List[chess.Move] = []
+
+        # for d in range(1, self.maxDepth + 1):
+        #     print(f'Depth: {d}')
+        #     line = []
+        #     self.auxSearch(board, d, initalHash, line)
+
+        #     self.ordering.setBestMove(line[0][0])
 
         self.auxSearch(board, self.maxDepth, initalHash, line)
 

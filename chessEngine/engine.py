@@ -42,6 +42,6 @@ class Engine:
         return board.san(self.ns.bestMove)
 
 if __name__ == '__main__':
-    e = Engine(10)
+    e = Engine(6)
 
     e.printeval('2r4r/1bn1qpk1/p3p2p/1p1pP2R/3N1QP1/8/PPP3BP/3R2K1 w - - 1 28')
