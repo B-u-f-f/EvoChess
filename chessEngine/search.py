@@ -131,7 +131,8 @@ class ZobristHash:
         ## print(f'After castling {key}')
             
         ## piece move
-        key ^= self._getPieceMoveHash(board, move) 
+        if(move != chess.Move.null()):
+            key ^= self._getPieceMoveHash(board, move) 
         
         ## turn
         key ^= self.blackTurnHash 
@@ -227,8 +228,8 @@ class MoveOrdering:
     
     def __init__(self) -> None:
         self.CAPTURED_PIECE_MULTIPLIER = 10
-        self.KILLERMOVE_BONUS = 50
-        self.KILLERMOVES_COUNT = 2
+        self.KILLERMOVE_BONUS = 100
+        self.KILLERMOVES_COUNT = 3
         self.killerMoves : t.Dict[int, t.List[chess.Move]] = {}
 
     def _capturedPieceBonus(self, board: chess.Board, move: chess.Move) -> t.Tuple[int, bool]:
@@ -298,6 +299,7 @@ class NegaSearch:
         self.tt: TranspositionTable = TranspositionTable()
         self.hashFunc = ZobristHash()
         self.ordering = MoveOrdering()
+        self.NULLMOVE_DEPTH = 2
 
     def search(self, board: chess.Board) -> None:
         initalHash = self.hashFunc.hashOfPosition(board)
@@ -306,10 +308,28 @@ class NegaSearch:
         self.auxSearch(board, self.maxDepth, initalHash, line)
 
         return line
- 
-    def auxSearch(self, board: chess.Board, 
-    depth: int, hash: int, pline: t.List[chess.Move], 
-    alpha: float = float('-inf'), beta: float = float('inf')) -> float:
+
+    @staticmethod
+    def _canReduce(board: chess.Board) -> bool:
+        return not board.is_check()
+
+    @staticmethod 
+    def _possibleZugzawng(board: chess.Board) -> bool:
+        pieces = board.piece_map().values()
+
+        for p in pieces:
+            if(p != chess.KING and p != chess.PAWN):
+                return False 
+
+        return True 
+
+    def auxSearch(self, 
+        board: chess.Board, 
+        depth: int, 
+        hash: int, 
+        pline: t.List[chess.Move], 
+        alpha: float = float('-inf'), 
+        beta: float = float('inf')) -> float:
 
         alphaOrg: float = alpha
         # Checking the transposition table
@@ -330,9 +350,8 @@ class NegaSearch:
                 pline[:] = entry.line
                 return value
 
-
         # Reached the leaf node
-        if(depth == 0):
+        if(depth <= 0):
             return self.evaluation.testEval(board)
 
         # checkmate or stalemate
@@ -342,15 +361,25 @@ class NegaSearch:
  
             return 0.0
 
+        if(NegaSearch._canReduce(board) and not NegaSearch._possibleZugzawng(board)):
+            line: t.List[chess.Move] = []
+
+            board.push(chess.Move.null())
+            newHash = self.hashFunc.makeMove(board, chess.Move.null(), hash)
+            value = - self.auxSearch(board, depth - 1 - self.NULLMOVE_DEPTH, newHash, line, -beta, -alpha) 
+            board.pop()
+
+            if(value >= beta):
+                pline[:] = line
+                return value
+
+
         # search 
         newEntry: TTEntry = TTEntry(float('-inf'), depth, NodeType.EXACT, [])
-        bestEval = float('-inf')
-
 
         orderedMoves: t.List[chess.Move] = self.ordering.orderMoves(board, depth)
-        for i in range(0, len(orderedMoves)):
-            move = orderedMoves[i][1]
-
+        bestEval = float('-inf')
+        for _, move in orderedMoves:
             line: t.List[chess.Move] = []
 
 
@@ -359,43 +388,27 @@ class NegaSearch:
             
             newHash = self.hashFunc.makeMove(board, move, hash)
 
-            value = float('-inf')
-            if(i == 0):
-                board.push(move)
-                value = -self.auxSearch(board, depth - 1, newHash, line, -beta, -alpha) 
-                board.pop()
-            else:
-                board.push(move)
-                value = -self.auxSearch(board, depth - 1, newHash, line, -alpha - 1, -alpha) 
-                board.pop()
+            board.push(move)
+            value = -self.auxSearch(board, depth - 1, newHash, line, -beta, -alpha) 
+            board.pop()
 
-                if(alpha < value < beta):
-                    board.push(move)
-                    value = -self.auxSearch(board, depth - 1, newHash, line, -beta, -value) 
-                    board.pop()
+            if(value > bestEval):
+                bestEval = value
+                pline[:] = [(move, bestEval)] + line
 
-            # if(value > bestEval):
-            #     bestEval = value
-            #     pline[:] = [(move, bestEval)] + line
-            
-            # alpha = max(alpha, bestEval) 
-
-            if(value > alpha):
-                alpha = value
-                pline[:] = [(move, alpha)] + line
-            # alpha = max(alpha, value)
+            alpha = max(value, alpha)
 
             if(alpha >= beta):
                 break
 
             if(depth == self.maxDepth):
-                print(move, " ", value, " ", [(move, alpha)] + line)
+                print(move, " ", value, " ", [(move, bestEval)] + line)
 
-        newEntry.value = alpha 
+        newEntry.value = bestEval 
 
-        if(alpha <= alphaOrg):
+        if(bestEval <= alphaOrg):
             newEntry.nodeType = NodeType.UPPERBOUND
-        elif (alpha >= beta):
+        elif (bestEval >= beta):
             newEntry.nodeType = NodeType.LOWERBOUND
         else:
             newEntry.nodeType = NodeType.EXACT
@@ -404,4 +417,4 @@ class NegaSearch:
 
         self.tt.add(hash, newEntry)
 
-        return alpha 
+        return bestEval 
