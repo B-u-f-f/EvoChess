@@ -1,4 +1,3 @@
-from lib2to3.pytree import Node
 import chess
 import evalfuction as ef
 import utility as u
@@ -133,7 +132,6 @@ class ZobristHash:
 
     def makeMove(self, board: chess.Board, move: chess.Move, key: int) -> int:
         key ^= self._getCastlingRightsAfterMoveHash(board, move) 
-        ## print(f'After castling {key}')
             
         ## piece move
         if(move != chess.Move.null()):
@@ -141,12 +139,10 @@ class ZobristHash:
         
         ## turn
         key ^= self.blackTurnHash 
-        ## print(f'after turn {key} {self.blackTurnHash}')
 
         ## en passant
         key ^= self._getEnPassantFileHash(board, move)
 
-        ## print(f'after en passant {key}')
         return key
 
     def hashOfPosition(self, board: chess.Board) -> int:
@@ -224,8 +220,6 @@ class TranspositionTable:
     def add(self, hash: int, entry: TTEntry):
         self.table[hash] = entry 
 
-
-
     def get(self, hash: int) -> t.Union[TTEntry, None]:
         return self.table.get(hash, None) 
 
@@ -270,7 +264,6 @@ class MoveOrdering:
 
     def _killerMoveBonus(self, depth: int, move: chess.Move):
         if (depth in self.killerMoves and move in self.killerMoves[depth]):
-            # print(f'Bonus for {move} at depth {depth}')
             return self.KILLERMOVE_BONUS
 
         return 0 
@@ -343,7 +336,11 @@ class NegaSearch:
         ttEntry = self.tt.get(hash)
         tempBoard = copy.deepcopy(board)
         lineLen = 0
-        while(ttEntry != None and ttEntry.bestMove != None and lineLen <= self.maxDepth):
+        while(
+            ttEntry != None and 
+            ttEntry.bestMove != None and 
+            lineLen <= self.maxDepth
+        ):
             line.append((ttEntry.bestMove, ttEntry.value))
             hash = self.hashFunc.makeMove(tempBoard, ttEntry.bestMove, hash) 
             tempBoard.push(ttEntry.bestMove)

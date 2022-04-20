@@ -1,58 +1,172 @@
+from functools import reduce
+from queue import Empty
 import chess
 import unittest
 
 import typing as t
 
 
+class PieceTables:
+    def __init__(self) -> None:
+        self.PIECE_SQUARE_TABLES = {
+            chess.PAWN: [   # Pawn
+                0,   0,   0,   0,   0,   0,  0,  0,
+                5,  10,  10, -20, -20,  10, 10,  5,
+                5,  -5, -10,   0,   0, -10, -5,  5,
+                0,   0,   0,  20,  20,   0,  0,  0,
+                5,   5,  10,  25,  25,  10,  5,  5,
+                10,  10,  20,  30,  30,  20, 10, 10,
+                50,  50,  50,  50,  50,  50, 50, 50,
+                0,   0,   0,   0,   0,   0,  0,  0
+            ],
+            chess.KNIGHT: [   # Knight
+                -50, -40, -30, -30, -30, -30, -40, -50,
+                -40, -20,   0,   0,   0,   0, -20, -40,
+                -30,   5,  10,  15,  15,  10,   5, -30,
+                -30,   0,  15,  20,  20,  15,   0, -30,
+                -30,   0,  10,  15,  15,  10,   0, -30,
+                -30,   5,  15,  20,  20,  15,   5, -30,
+                -40, -20,   0,   5,   5,   0, -20, -40,
+                -50, -40, -30, -30, -30, -30, -40, -50
+            ],
+            chess.BISHOP: [   # Bishop
+                -20, -10, -10, -10, -10, -10, -10, -20,
+                -10,   5,   0,   0,   0,   0,   5, -10,
+                -10,  10,  10,  10,  10,  10,  10, -10,
+                -10,   0,  10,  10,  10,  10,   0, -10,
+                -10,   5,   5,  10,  10,   5,   5, -10,
+                -10,   0,   5,  10,  10,   5,   0, -10,
+                -10,   0,   0,   0,   0,   0,   0, -10,
+                -20, -10, -10, -10, -10, -10, -10, -20
+            ],
+            chess.ROOK: [   # Rook
+                0,  0,  0,  5,  5,  0,  0,  0,
+                -5,  0,  0,  0,  0,  0,  0, -5,
+                -5,  0,  0,  0,  0,  0,  0, -5,
+                -5,  0,  0,  0,  0,  0,  0, -5,
+                -5,  0,  0,  0,  0,  0,  0, -5,
+                -5,  0,  0,  0,  0,  0,  0, -5,
+                5, 10, 10, 10, 10, 10, 10,  5,
+                0,  0,  0,  0,  0,  0,  0,  0
+            ],
+            chess.QUEEN: [   # Queen
+                -20, -10, -10, -5, -5, -10, -10, -20,
+                -10,   0,   5,  0,  0,   0,   0, -10,
+                -10,   5,   5,  5,  5,   5,   0, -10,
+                0,   0,   5,  5,  5,   5,   0,  -5,
+                -5,   0,   5,  5,  5,   5,   0,  -5,
+                -10,   0,   5,  5,  5,   5,   0, -10,
+                -10,   0,   0,  0,  0,   0,   0, -10,
+                -20, -10, -10, -5, -5, -10, -10, -20
+            ],
+            chess.KING: [   # King mid-game
+                20,  30,  10,   0,   0,  10,  30,  20,
+                20,  20,   0,   0,   0,   0,  20,  20,
+                -10, -20, -20, -20, -20, -20, -20, -10,
+                -20, -30, -30, -40, -40, -30, -30, -20,
+                -30, -40, -40, -50, -50, -40, -40, -30,
+                -30, -40, -40, -50, -50, -40, -40, -30,
+                -30, -40, -40, -50, -50, -40, -40, -30,
+                -30, -40, -40, -50, -50, -40, -40, -30,
+            ]
+        }
+
+class Parameters:
+    def __init__(self,
+
+        ## ROOK PARAMETERS
+        rValue: float = 500,
+        rOpenFile: float = 27,
+        rSemiOpenFile: float = 57,
+        rClosedFile: float = -46,
+        rSeventh: float = 41,
+        rMob: float = 9,
+
+        ## PAWN PARAMETERS
+        pValue: float = 100,
+        pCenter: float = -8,
+        pIso: float = -3,
+        pDouble: float = -7,
+        pPass: float = 62,
+        pRookBehindPawn: float = 30,
+        pBackward: float = -14,
+        pBlocked: float = -23,
+
+        ## KNIGHT PARAMETERS
+        kValue: float = 300,
+        kPeriphery0: float = -51,
+        kPeriphery1: float = -18,
+        kPeriphery2: float = 45,
+        kPeriphery3: float = -1,
+        kSupported: float  = 40,
+        kMob: float = 14,
+
+        ## BISHOP PARAMETERS
+        bValue: float = 300,
+        bOnMainDiag: float = 74,
+        bMob: float = 13,
+
+        ## QUEEN PARAMETERS
+        qValue: float = 900,
+        qMob: float = 3
+    ) -> None:
+
+        ## ROOK PARAMETERS
+        self.rValue: float        = rValue
+        self.rOpenFile: float     = rOpenFile 
+        self.rSemiOpenFile: float = rSemiOpenFile 
+        self.rClosedFile: float   = rClosedFile 
+        self.rSeventh: float      = rSeventh
+        self.rMob: float          = rMob
+
+        ## PAWN PARAMETERS 
+        self.pValue: float          = pValue
+        self.pCenter: float         = pCenter
+        self.pIso: float            = pIso
+        self.pDouble: float         = pDouble
+        self.pPass: float           = pPass
+        self.pRookBehindPawn: float = pRookBehindPawn
+        self.pBackward: float       = pBackward
+        self.pBlocked: float        = pBlocked
+
+        ## KNIGHT PARAMETERS
+        self.kValue: float      = kValue
+        self.kPeriphery0: float = kPeriphery0
+        self.kPeriphery1: float = kPeriphery1
+        self.kPeriphery2: float = kPeriphery2
+        self.kPeriphery3: float = kPeriphery3
+        self.kSupported: float  = kSupported
+        self.kMob: float        = kMob
+
+        ## BISHOP PARAMETERS
+        self.bValue: float      = bValue
+        self.bOnMainDiag: float = bOnMainDiag
+        self.bMob: float        = bMob
+
+        ## QUEEN PARAMETERS
+        self.qValue: float  = qValue
+        self.qMob: float    = qMob
+
 class EvalFunc:
     
-    def __init__(self,
-        value = {
-                chess.PAWN: 100,
-                chess.KNIGHT: 300,
-                chess.BISHOP: 300,
-                chess.ROOK: 500,
-                chess.QUEEN: 900
-                } ) -> None:
+    def __init__(self, params: Parameters = None) -> None:
 
-        self.pieceValues = {
-                'pawnvalue': 100,
-                'knightvalue': 342,
-                'bishopvalue': 374,
-                'rookvalue': 530,
-                'queenvalue': 911,
-                'centerpawns': -8,
+        self.pieceValues = { 
                 'kingpawnshield': 35,
                 'kingcastled': 60,
-                'bishoponlarge': 74,
-                'bishoppair': 5,
-                'bishopmob': 13,
-                'knightmob': 14,
-                'knightsupport': 40,
-                'knightperiphery0': -51,
-                'knightperiphery1': -18,
-                'knightperiphery2': 45,
-                'knightperiphery3': -1,
-                'isopawn': -3,
-                'doublepawn': -7,
-                'passpawn': 62,
-                'rookbehindpawn': 30,
-                'backwardpawn': -14,
                 'rankpasspawn': 5,
-                'blockedpawn': -23,
-                'blockedpasspawn': -10,
-                'rookonopenfile': 27,
-                'rookonsemiopen': 57,
-                'rookonclosed': -46,
-                'rookonseventh': 41,
-                'rookmob': 9,
+                'blockedpasspawn': -10, 
                 'rookconnected': 12,
                 'knightonweaksquare': -39,
-                'queenmobility': 3 
                 }
 
         self.VALIDRANGE = range(8)
-        self.value = value
+        self.pieceTables = PieceTables()
+
+        if(params == None):
+            self.parameters = Parameters()
+        else:
+            self.parameters = params
 
     
     def _setpieces(self, board: chess.Board) -> None:
@@ -79,125 +193,328 @@ class EvalFunc:
             self.pieceSquares[(p.color, p.piece_type)].append(s)
     
     def testEval(self, board: chess.Board) -> float:
-        self._setpieces(board)
+        # self._setpieces(board)
 
-        eval_score = 0.0
-                
-        # pieces -> Dict[chess.Square, chess.Piece] 
-        color = board.turn
-        
-        for p in range(1, 6):
-            eval_score += len(self.pieceSquares[(color, p)]) * self.value[p] 
-
-        for p in range(1, 6):
-            eval_score -= len(self.pieceSquares[(not color, p)]) * self.value[p] 
-
-        
+        eval_score = self.piecesValueEvaluation(board) 
         return eval_score
 
-    def eval(self, board : chess.Board) -> float:
-        self._setpieces(board)
+    def _adjacentPieces(self, square: int, board: chess.Board, color: bool) -> t.Dict[int, chess.Piece]:
+        file: int = chess.square_file(square)
+        rank: int = chess.square_rank(square)
 
-        eval_score = 0.0
+        outDict: t.Dict[int, chess.Piece] = {}
+        VALIDRANGE = range(0, 8)
+
+        yMult = -1 if color == chess.BLACK else 1
+        for i in [-1, 0, 1]:
+            for j in [-1, 0, 1]: 
+                if(i == j == 0): 
+                    continue
+
+                if((file + i) in VALIDRANGE and (rank + j) in VALIDRANGE):
+                    p = board.piece_at(chess.square(file + i, rank + j))
+
+                    if(p != None):
+                        outDict[(i, j * yMult)] = p
+
+        return outDict
+
+
+    def rookEvaluation(self, square: int, board: chess.Board, color: bool) -> float:
+        file: int = chess.square_file(square) 
+        rank: int = chess.square_rank(square)
+
+        bonus = 0
+
+        ##
+        ## FILE TYPE BONUS
+        ##
+
+        # 0 -> open file
+        # 1 -> semi open file
+        # 3 -> closed file
+        rookFileType: int = 0 
+
+        # checking every rank 
+        piecesOnRooksFile = board.piece_map(
+            mask = chess.BB_FILES[file] 
+        )
+
+        for s, p in piecesOnRooksFile.items():
+            if(p.piece_type == chess.PAWN):
+
+                if(p.color == color):
+                    rookFileType |= 0x1
+
+                if(p.color == (not color)):
+                    rookFileType |= 0x2
+
+        if(rookFileType == 0):
+            bonus += self.parameters.rOpenFile
+        elif (rookFileType == 1):
+            bonus += self.parameters.rSemiOpenFile
+        elif(rookFileType == 3):
+            bonus += self.parameters.rClosedFile
+    
+        ##
+        ## RANK BONUS
+        ##
+        BONUS_RANKS = {chess.WHITE: 6, chess.BLACK: 1}
+        if(rank == BONUS_RANKS[color]):
+            bonus += self.parameters.rSeventh 
+
+        return bonus
+    
+    def pawnEvaluation(self, square: int, board: chess.Board, color: bool) -> float:
+        file: int = chess.square_file(square) 
+        rank: int = chess.square_rank(square)
+
+        bonus: float = 0
+
+        ##
+        ## CENTER PAWN BONUS
+        ##
+        CENTER_SQUARES = [chess.E4, chess.E5, chess.D4, chess.D5]
+        isCentral = False
+        if(square in CENTER_SQUARES):
+            isCentral = True
+            bonus += self.parameters.pCenter
+
+        ##
+        ## ISOLATED PAWNS
+        ##
+        adjacentPieces: t.Dict[int, chess.Piece] = self._adjacentPieces(square, board, color)
+
+        isIso = len(adjacentPieces) == 0
+
+        bonus += self.parameters.pIso
         
+        ##
+        ## DOUBLED PAWNS
+        ## 
+        ranksAhead = range(rank + 1, 8) 
+        ranksBehind = range(0, rank)
+
+        if(color == chess.BLACK):
+            ranksAhead, ranksBehind = ranksBehind, ranksAhead
+
+        piecesBehindMask = reduce(lambda x, y: chess.BB_RANKS[x] | chess.BB_RANKS[y], ranksBehind[1:], ranksBehind[0]) & chess.BB_FILES[file]
+        piecesBehind = board.piece_map(mask = piecesBehindMask)
+
+        for _, p in piecesBehind:
+            if(p != None and p.pieceType == chess.PAWN and p.color == color):
+                bonus += self.parameters.pDouble
+                break
+
+        ##
+        ## PASS PAWNS
+        ##
+        files = [file]
+        if((file - 1) >= 0):
+            files.append(file - 1)
+
+        if((file + 1) < 8):
+            files.append(file + 1)
+
+        adjacentFilesMask = reduce(lambda x, y: chess.BB_FILES[x] | chess.BB_FILES[y], files[1:], files[0])
+        piecesAheadMask = reduce(lambda x, y: chess.BB_RANKS[x] | chess.BB_RANKS[y], ranksAhead[1:], ranksAhead[0])
+
+        piecesAheadOnNeighbouringFilesMask = piecesAheadMask & adjacentFilesMask
+        piecesAheadOnNeighbouringFiles = board.piece_map(
+            mask = piecesAheadOnNeighbouringFilesMask
+        )
+
+        isPassPawn = True 
+        for _, p in piecesAheadOnNeighbouringFiles:
+            if(p != None and p.pieceType == chess.PAWN and p.color == (not color)):
+                isPassPawn = False 
+                break
         
-        # pieces -> Dict[chess.Square, chess.Piece] 
-        color = board.turn
+        if(isPassPawn):
+            bonus += self.parameters.pPass
 
-        pDict = self._allPieces(board, color)
+        ##
+        ## ROOK BEHIND PASS PAWN 
+        ##
+        if(isPassPawn):
+            for _, p in piecesBehind:
+                if(p != None and p.pieceType == chess.ROOK and p.color == color):
+                    bonus += self.parameters.pRookBehindPawn
+
+        ##
+        ## BACKWARD PAWNS 
+        ##
+        if(not isIso):
+            b1 = adjacentPieces.get((1, -1))
+            b2 = adjacentPieces.get((0, -1))
+            b3 = adjacentPieces.get((-1, -1))
+
+            if(b1 == b2 == b3 == None):
+                a1 = adjacentPieces.get((1, 1))
+                a2 = adjacentPieces.get((0, 1))
+                a3 = adjacentPieces.get((-1, 1))
+
+                isBackward = False 
+                for p in [a1, a2, a3]:
+                    if(p != None and p.piece_type == chess.PAWN and p.color == color):
+                        isBackward = True
+
+            if(isBackward):
+                bonus += self.parameters.pBackward
+
+        ##
+        ## BLOCKED PAWN
+        ##
+        if(isCentral):
+            piecesAhead = board.piece_map(
+                mask = piecesAhead & chess.BB_FILES[file]
+            )
+
+            isBlocked = False
+            for _, p in piecesAhead:
+                if(p != None and p.color == color):
+                    isBlocked = True
+
+            if(isBlocked):
+                bonus += self.parameters.pBlocked
+
+        return bonus
+
+
+    def knightEvaluation(self, square: int, board: chess.Board, color: bool) -> float:
+        file: int = chess.square_file(square) 
+        rank: int = chess.square_rank(square)
+
+        bonus: float = 0
+
+        ##
+        ## KNIGHT PERIPHERY
+        ## 
+        k0: float = self.parameters.kPeriphery0
+        k1: float = self.parameters.kPeriphery1
+        k2: float = self.parameters.kPeriphery2
+        k3: float = self.parameters.kPeriphery3
+
+        KNIGHT_PERIPHERY = [   # Knight
+            k0, k0, k0, k0, k0, k0, k0, k0,
+            k0, k1, k1, k1, k1, k1, k1, k0,
+            k0, k1, k2, k2, k2, k2, k1, k0,
+            k0, k1, k2, k3, k3, k2, k1, k0,
+            k0, k1, k2, k3, k3, k2, k1, k0,
+            k0, k1, k2, k2, k2, k2, k1, k0,
+            k0, k1, k1, k1, k1, k1, k1, k0,
+            k0, k0, k0, k0, k0, k0, k0, k0
+        ]
+
+        bonus += KNIGHT_PERIPHERY[square]
+
+        ##
+        ## KNIGHT SUPPORTED 
+        ##
+
+        adjacentPieces: t.Dict[int, chess.Piece] = self._adjacentPieces(square, board, color)
+        b1 = adjacentPieces.get((-1, -1))
+        b2 = adjacentPieces.get((0, -1))
+        b3 = adjacentPieces.get((1, -1))
+
+        isSupported = False
+        for p in [b1, b2, b3]:
+            if(p != None and p.piece_type == chess.PAWN and p.color == color):
+                isSupported = True
+
+        if(isSupported):
+            bonus += self.parameters.kSupported
+
+        ##
+        ## KNIGHT MOBILITY
+        ##
+
+        mob = 0
+        for m in board.legal_moves:
+            if(m.from_square == square):
+                mob += 1 
+
+        bonus += mob * self.parameters.kMob
+
+        return bonus
+
+    def bishopEvaluation(self, square: int, board: chess.Board, color: bool) -> float:
+        file: int = chess.square_file(square) 
+        rank: int = chess.square_rank(square)
+
+        bonus: float = 0
+
+        ##
+        ## BISHOP ON LARGE
+        ## 
+        WHITEDIAGSQUARES: t.List[chess.Move] = [
+                chess.H1, chess.G2, chess.F3, chess.E4,
+                chess.D5, chess.C6, chess.B7, chess.A8]
         
-        val = 0
-        for k, v in pDict.items():
-            if(k == chess.PAWN):
-                val += v * self.pieceValues['pawnvalue']
-            elif(k == chess.BISHOP):
-                val += v * self.pieceValues['bishopvalue']
-            elif(k == chess.ROOK):
-                val += v * self.pieceValues['rookvalue']
-            elif(k == chess.KNIGHT):
-                val += v * self.pieceValues['knightvalue']
-            elif(k == chess.QUEEN):
-                val += v * self.pieceValues['queenvalue']
+        BLACKDIAGSQUARES: t.List[chess.Move] = [
+                chess.A1, chess.B2, chess.C3, chess.D4,
+                chess.E5, chess.F6, chess.G7, chess.H8
+                ]
 
+        if(square in WHITEDIAGSQUARES or square in BLACKDIAGSQUARES):
+            bonus += self.parameters.bOnMainDiag
 
-        pDict = self._kingAttacked(board, color)
-        for k, v in pDict.items():
-            if(k == chess.PAWN):
-                val -= v * self.pieceValues['pawnvalue']
-            elif(k == chess.BISHOP):
-                val -= v * self.pieceValues['bishopvalue']
-            elif(k == chess.ROOK):
-                val -= v * self.pieceValues['rookvalue']
-            elif(k == chess.KNIGHT):
-                val -= v * self.pieceValues['knightvalue']
-            elif(k == chess.QUEEN):
-                val -= v * self.pieceValues['queenvalue']
+        return bonus
 
-        pDict = self._kingDefended(board, color)
-        for k, v in pDict.items():
-            if(k == chess.PAWN):
-                val += v * self.pieceValues['pawnvalue']
-            elif(k == chess.BISHOP):
-                val += v * self.pieceValues['bishopvalue']
-            elif(k == chess.ROOK):
-                val += v * self.pieceValues['rookvalue']
-            elif(k == chess.KNIGHT):
-                val += v * self.pieceValues['knightvalue']
-            elif(k == chess.QUEEN):
-                val += v * self.pieceValues['queenvalue']
+    def mobEvaluation(self, board: chess.Board) -> float:
+        color: bool = board.turn 
 
+        pieceBonus: t.Dict[int, float] = {
+            chess.ROOK: self.parameters.rMob,
+            chess.KNIGHT: self.parameters.kMob,
+            chess.BISHOP: self.parameters.bMob,
+            chess.QUEEN: self.parameters.qMob
+        }
 
+        bonus: float = 0
 
-        eval_score = \
-                self._centerpawnCount(board, color) * self.pieceValues['centerpawns'] \
-            +   self._kingPawnShield(board, color) * self.pieceValues['kingpawnshield'] \
-            +   self._bishopMob(board, color) * self.pieceValues['bishopmob'] \
-            +   self._bishopMob(board, color) * self.pieceValues['bishoponlarge'] \
-            +   self._bishopPair(board, color) * self.pieceValues['bishoppair'] \
-            +   self._knightMob(board, color) * self.pieceValues['knightmob'] \
-            +   self._knightSupport(board, color) * self.pieceValues['knightsupport'] \
-            +   self._knightPeriphery0(board, color) * self.pieceValues['knightperiphery0'] \
-            +   self._knightPeriphery1(board, color) * self.pieceValues['knightperiphery1'] \
-            +   self._knightPeriphery2(board, color) * self.pieceValues['knightperiphery2'] \
-            +   self._knightPeriphery3(board, color) * self.pieceValues['knightperiphery3'] \
-            +   self._isoPawn(board, color) * self.pieceValues['isopawn'] \
-            +   self._doubledPawn(board, color) * self.pieceValues['doublepawn'] \
-            +   self._passPawn(board, color) * self.pieceValues['passpawn'] \
-            +   self._rookBehindPassPawn(board, color) * self.pieceValues['rookbehindpawn'] \
-            +   self._backwardPawn(board, color) * self.pieceValues['backwardpawn'] \
-            +   self._blockPawn(board, color) * self.pieceValues['blockedpawn'] \
-            +   self._rookopenfile(board, color) * self.pieceValues['rookonopenfile'] \
-            +   self._rooksemiopenfile(board, color) * self.pieceValues['rookonsemiopen'] \
-            +   self._rookclosedfile(board, color) * self.pieceValues['rookonclosed'] \
-            +   self._rookOnSeventh(board, color) * self.pieceValues['rookonseventh'] \
-            +   self._rookMob(board, color) * self.pieceValues['rookmob'] \
-            +   self._queenMob(board, color) * self.pieceValues['queenmobility'] \
-            +   val
+        contrib: t.Dict[bool, int] = {
+            color: 1,
+            (not color): -1
+        } 
 
-               
-        return eval_score
+        for move in board.legal_moves:
+            p = board.piece_at(move.from_square)
 
-    def _centerpawnCount(self, board: chess.Board, color: chess.Color) -> int:
-        e4: chess.Piece = board.piece_at(chess.E4)
-        e5: chess.Piece = board.piece_at(chess.E5)
-        d4: chess.Piece = board.piece_at(chess.D4)
-        d5: chess.Piece = board.piece_at(chess.D5)
+            if(p.piece_type == chess.KING or p.piece_type == chess.PAWN):
+                continue
+            
+            bonus += contrib[p.color] * pieceBonus[p.piece_type] 
 
-        
-        count: int = 0
-        if e4 != None:
-            count += e4.color == color
+        return bonus
 
-        if d4 != None:
-            count += d4.color == color
+    def piecesValueEvaluation(self, board: chess.Board) -> float:
+        color: bool = board.turn 
 
-        if e5 != None:
-            count += e5.color == color
+        pieceBonus: t.Dict[int, float] = {
+            chess.ROOK: self.parameters.rValue,
+            chess.KNIGHT: self.parameters.kValue,
+            chess.BISHOP: self.parameters.bValue,
+            chess.QUEEN: self.parameters.qValue,
+            chess.PAWN: self.parameters.pValue
+        }
 
-        if d5 != None:
-            count += d5.color == color
-        
-        return count
+        bonus: float = 0
+
+        contrib: t.Dict[bool, int] = {
+            color: 1,
+            (not color): -1
+        } 
+
+        piecemap = board.piece_map()
+ 
+        for s, p in piecemap.items():
+            if(p.piece_type == chess.KING):
+                continue
+
+            bonus += contrib[p.color] * pieceBonus[p.piece_type] 
+
+        return bonus
 
     def _kingPawnShield(self, board: chess.Board, color: chess.Color) -> int:
         kposition : chess.Square = board.king(color)
@@ -275,51 +592,8 @@ class EvalFunc:
     
     def _kingCastled(self, board: chess.Board, color: chess.Color) -> bool:
         pass
-
-    def _bishopMob(self, board: chess.Board, color: chess.Color) -> int:
-        # finding the bishop squares
-        bSquares: t.Dict[chess.Square, int] = {} 
-        for s in self.pieceSquares[(color, chess.BISHOP)]:
-                bSquares[s] = 0
-        
-
-        for m in board.legal_moves:
-            if(m.from_square in bSquares):
-                bSquares[m.from_square] += 1 
-
-        return sum(bSquares.values())
     
-    def _bishopOnLarge(self, board: chess.Board, color: chess.Color) -> int:
-        whiteDiagSquares: t.List[chess.Move] = [
-                chess.H1, chess.G2, chess.F3, chess.E4,
-                chess.D5, chess.C6, chess.B7, chess.A8]
-        
-        blackDiagSquares: t.List[chess.Move] = [
-                chess.A1, chess.B2, chess.C3, chess.D4,
-                chess.E5, chess.F6, chess.G7, chess.H8
-                ]
 
-        
-        whiteDiag = False
-        blackDiag = False
-
-        for s in whiteDiagSquares:
-            piece: chess.Piece = board.piece_at(s)
-
-            if(piece != None and piece.piece_type == chess.BISHOP and piece.color == color):
-                whiteDiag = True
-
-                break
-
-        for s in blackDiagSquares:
-            piece: chess.Piece = board.piece_at(s)
-
-            if(piece != None and piece.piece_type == chess.BISHOP and piece.color == color):
-                blackDiag = True
-
-                break
-
-        return int(whiteDiag) + int(blackDiag) 
 
     def _bishopPair(self, board: chess.Board, color: chess.Color) -> int:
         pieceDict = board.piece_map()
@@ -330,861 +604,110 @@ class EvalFunc:
                 count += 1
         
         return 1 if len(self.pieceSquares[(color, chess.BISHOP)]) == 2 else 0
-
-    def _knightMob(self, board: chess.Board, color: chess.Color) -> int:
-
-        # finding the bishop squares
-        kSquares: t.Dict[chess.Square, int] = {} 
-        for s in self.pieceSquares[(color, chess.KNIGHT)]:
-            kSquares[s] = 0
-        
-
-        for m in board.legal_moves:
-            if(m.from_square in kSquares):
-                kSquares[m.from_square] += 1 
-
-        return sum(kSquares.values())
     
-    # number of supported knights
-    def _knightSupport(self, board: chess.Board, color: chess.Color) -> int:
-        kSquares: t.List[chess.Square] = self.pieceSquares[(color, chess.KNIGHT)] 
-        
-        count = 0
-        for s in kSquares:
-            file : int = chess.square_file(s)
-            rank : int = chess.square_rank(s)
-            
-            rank += -1 if color else +1
-
-            for f in [file-1, file+1]:
-                if(rank in self.VALIDRANGE and f in self.VALIDRANGE):
-                    piece : chess.Piece = board.piece_at(chess.square(f, rank))
-
-                    if(piece != None and piece.piece_type == chess.PAWN and piece.color == color):
-                        count += 1
-                        break
-
-        return count 
-
-    def _knightPeriphery0(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        kSquares: t.List[chess.Square] = [] 
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.KNIGHT and p.color == color):
-                kSquares.append(s)
-        
-        count = 0
-        for s in kSquares:
-            file : int = chess.square_file(s)
-            rank : int = chess.square_rank(s)
-            
-            #print(file, rank)
-            if(file in [0, 7] or rank in [0, 7]):
-                count += 1
-        
-        return count 
-
-
-    def _knightPeriphery1(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        kSquares: t.List[chess.Square] = [] 
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.KNIGHT and p.color == color):
-                kSquares.append(s)
-        
-        count = 0
-        for s in kSquares:
-            file : int = chess.square_file(s)
-            rank : int = chess.square_rank(s)
-            
-            #print(file, rank)
-            positions = list(zip([1] * 6, range(1, 7)))\
-            + list(zip([6] * 6, range(1, 7)))\
-            + list(zip(range(1, 7), [1] * 6))\
-            + list(zip(range(1, 7), [6] * 6))
-
-
-            if((file, rank) in positions):
-                count += 1
-        
-        return count 
-
-    def _knightPeriphery2(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        kSquares: t.List[chess.Square] = [] 
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.KNIGHT and p.color == color):
-                kSquares.append(s)
-        
-        count = 0
-        for s in kSquares:
-            file : int = chess.square_file(s)
-            rank : int = chess.square_rank(s)
-            
-            positions = list(zip([2] * 6, range(2, 6)))\
-            + list(zip([5] * 6, range(2, 6)))\
-            + list(zip(range(2, 6), [2] * 6))\
-            + list(zip(range(2, 6), [5] * 6))
-
-
-            if((file, rank) in positions):
-                count += 1
-        
-        return count 
-
-    def _knightPeriphery3(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        kSquares: t.List[chess.Square] = [] 
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.KNIGHT and p.color == color):
-                kSquares.append(s)
-        
-        count = 0
-        for s in kSquares:
-            file : int = chess.square_file(s)
-            rank : int = chess.square_rank(s)
-            
-            if((file, rank) in [(3, 4), (4, 3), (3, 3), (4, 4)]):
-                count += 1
-
-        return count 
-
-    def _isoPawn(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        pSquares: t.List[chess.Square] = [] 
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.PAWN and p.color == color):
-                pSquares.append(s)
-        
-        count = 0
-        for s in pSquares:
-            file : int = chess.square_file(s)
-            rank : int = chess.square_rank(s)
-
-            flag = True
-            for i in [-1, 0, 1]:
-                for j in [-1, 0, 1]: 
-                    if(i == j == 0): 
-                        continue
-
-                    if((file + i) in self.VALIDRANGE and (rank + j) in self.VALIDRANGE):
-                        p = board.piece_at(chess.square(file + i, rank + j))
-
-                        if(p != None and p.piece_type == chess.PAWN and p.color == color):
-                            flag = False
-                
-                if(not flag):
-                    break
-
-            if(flag):
-                count += 1
-
-        return count
-    
-    # number of doubled pawns
-    def _doubledPawn(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        pSquares: t.Dict[int, int] = {
-                0: 0,
-                1: 0,
-                2: 0,
-                3: 0,
-                4: 0,
-                5: 0,
-                6: 0,
-                7: 0
-                } 
-
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.PAWN and p.color == color):
-                file = chess.square_file(s)
-                pSquares[file] += 1
-        
-        count = 0
-        for k, v in pSquares.items():
-            if(v > 1):
-                count += v
-
-        return count
-
-    def _passPawn(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        pSquares: t.List[chess.Square] = []
-
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.PAWN and p.color == color):
-                pSquares.append(s)
-
-        dir = +1 if color else -1
-        lim = 7 if color else 0
-        
-        count = 0
-        for s in pSquares:
-            file = chess.square_file(s)
-            rank = chess.square_rank(s) + dir
-            
-            flag = False
-            while (rank != lim):
-                
-                for j in [-1, 0, +1]:
-                    f = file + j 
-                    
-                    if(rank in self.VALIDRANGE and f in self.VALIDRANGE):
-                        
-                        if(f in self.VALIDRANGE):
-                            sq = chess.square(f, rank)
-
-                            piece = board.piece_at(sq)
-                            if(piece != None and piece.piece_type == chess.PAWN and piece.color != color):
-                                flag = True
-                                break
-
-                if(flag):
-                    break
-
-                rank += dir
-
-            if(not flag):
-                count += 1
-        
-        return count 
-
-    def _rookBehindPassPawn(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        pSquares: t.List[chess.Square] = []
-
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.PAWN and p.color == color):
-                pSquares.append(s)
-
-        dir = +1 if color else -1
-        lim = 7 if color else 0
-        
-        passedpawns = []
-        for s in pSquares:
-            file = chess.square_file(s)
-            rank = chess.square_rank(s) + dir
-            
-            flag = False
-            while (rank != lim):
-                
-                for j in [-1, 0, +1]:
-                    f = file + j 
-                    
-                    if(rank in self.VALIDRANGE and f in self.VALIDRANGE):
-                        
-                        if(f in self.VALIDRANGE):
-                            sq = chess.square(f, rank)
-
-                            piece = board.piece_at(sq)
-                            if(piece != None and piece.piece_type == chess.PAWN and piece.color != color):
-                                flag = True
-                                break
-
-                if(flag):
-                    break
-
-                rank += dir
-
-            if(not flag):
-                passedpawns.append(s)
-        
-        dir = -1 if color else +1
-        lim = 0 if color else 7
-        
-        count = 0
-        for pp in passedpawns:
-            file = chess.square_file(s)
-            rank = chess.square_rank(s) + dir
-            
-            while (rank != lim):
-                sq = chess.square(file, rank)
-                piece = board.piece_at(sq)
-
-                if(piece != None and piece.piece_type == chess.ROOK and piece.color == color):
-                    count += 1
-                    break
-
-                rank += dir
-             
-
-        return count
-
-    def _backwardPawn(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        pSquares: t.List[chess.Square] = []
-
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.PAWN and p.color == color):
-                pSquares.append(s)
-        
-
-        beh = -1 if color else +1
-        
-        count = 0
-        for p in pSquares:
-            file = chess.square_file(p)
-            rank = chess.square_rank(p)
-
-            behRank = rank + beh
-            forRank = rank - beh
-            
-            isPawn1 = False
-            for i in [-1, 0, +1]:
-                if(behRank in self.VALIDRANGE and (file + i) in self.VALIDRANGE):
-                    sq = chess.square(file + i, behRank)
-                    piece = board.piece_at(sq)
-
-                    if(piece != None and piece.piece_type == chess.PAWN and piece.color == color):
-                        isPawn1 = True
-                        break
-
-            isPawn2 = False
-            for i in [-1, 0, +1]:
-                if(forRank in self.VALIDRANGE and (file + i) in self.VALIDRANGE):
-                    sq = chess.square(file + i, forRank)
-                    piece = board.piece_at(sq)
-
-                    if(piece != None and piece.piece_type == chess.PAWN and piece.color == color):
-                        isPawn2 = True
-                        break
-
-            if(isPawn2 and not isPawn1):
-                count += 1
-
-        return count
-
     def _rankPassedPawn(self, board: chess.Board, color: chess.Color) -> int:
         pass
     
-    def _blockPawn(self, board: chess.Board, color: chess.Color) -> int:
-        e2 = board.piece_at(chess.E2)
-        d2 = board.piece_at(chess.D2)
-        
-        count = 0
-        if(e2 != None and e2.piece_type == chess.PAWN and e2.color == color):
-            e3 = board.piece_at(chess.E3)
-            e4 = board.piece_at(chess.E4)
-
-            if(e3 != None and e3.color == color):
-                count += 1
-
-            elif (e4 != None and e4.color == color):
-                count += 1
-
-        if(d2 != None and d2.piece_type == chess.PAWN and d2.color == color):
-            d3 = board.piece_at(chess.D3)
-            d4 = board.piece_at(chess.D4)
-
-            if(d3 != None and d3.color == color):
-                count += 1
-
-            elif (d4 != None and d4.color == color):
-                count += 1
-
-        return count
-
     def _blockedPassedPawn(self, board: chess.Board, color: chess.Color) -> int:
         pass
 
-    def _rookopenfile(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        rSquares: t.List[chess.Square] = []
-
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.ROOK and p.color == color):
-                rSquares.append(s)
-        
-        count = 0
-        for s in rSquares:
-            file = chess.square_file(s)
-            rank = chess.square_rank(s)
-            
-            flag = False
-            for i in range(0, 8):
-                if(i == rank):
-                    continue
-                
-                sq = chess.square(file, i)
-                piece = board.piece_at(sq)
-
-                if(piece != None and piece.piece_type == chess.PAWN):
-                    flag = True
-                    break
-
-            if (not flag):
-                count += 1
-
-        return count
-
-
-    def _rooksemiopenfile(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        rSquares: t.List[chess.Square] = []
-
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.ROOK and p.color == color):
-                rSquares.append(s)
-        
-        count = 0
-        for s in rSquares:
-            file = chess.square_file(s)
-            rank = chess.square_rank(s)
-            
-            flag = False
-            for i in range(0, 8):
-                if(i == rank):
-                    continue
-                
-                sq = chess.square(file, i)
-                piece = board.piece_at(sq)
-
-                if(piece != None and piece.piece_type == chess.PAWN and piece.color == color):
-                    flag = True
-                    break
-
-            if (not flag):
-                count += 1
-
-        return count
-
-    def _rookclosedfile(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        rSquares: t.List[chess.Square] = []
-
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.ROOK and p.color == color):
-                rSquares.append(s)
-        
-        count = 0
-        for s in rSquares:
-            file = chess.square_file(s)
-            rank = chess.square_rank(s)
-            
-            flag1 = False
-            flag2 = False
-            for i in range(0, 8):
-                if(i == rank):
-                    continue
-                
-                sq = chess.square(file, i)
-                piece = board.piece_at(sq)
-
-                if(piece != None and piece.piece_type == chess.PAWN and piece.color == color):
-                    flag1 = True
-                if(piece != None and piece.piece_type == chess.PAWN and piece.color != color):
-                    flag2 = True
-
-
-
-            if (flag1 and flag2):
-                count += 1
-
-        return count
-
-    def _rookOnSeventh(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-        
-        count = 0
-        if(color):
-            for s, p in pieceDict.items():
-                if(p.piece_type == chess.ROOK and p.color == color):
-                    rank = chess.square_rank(s)
-                    
-                    if(rank == 6):
-                        count += 1
-     
-        else:
-            for s, p in pieceDict.items():
-                if(p.piece_type == chess.ROOK and p.color == color):
-                    rank = chess.square_rank(s)
-
-                    if(rank == 1):
-                        count += 1
-
-        return count
-
-
-    def _rookMob(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-
-        # finding the bishop squares
-        rSquares: t.Dict[chess.Square, int] = {} 
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.ROOK and p.color == color):
-                rSquares[s] = 0
-        
-
-        for m in board.legal_moves:
-            if(m.from_square in rSquares):
-                rSquares[m.from_square] += 1 
-
-        return sum(rSquares.values())
 
     def _rookCon(self, board: chess.Board, color: chess.Color) -> int:
         pass
 
-    def _queenMob(self, board: chess.Board, color: chess.Color) -> int:
-        pieceDict = board.piece_map()
-
-        # finding the bishop squares
-        qSquares: t.Dict[chess.Square, int] = {} 
-        for s, p in pieceDict.items():
-            if(p.piece_type == chess.QUEEN and p.color == color):
-                qSquares[s] = 0
-        
-
-        for m in board.legal_moves:
-            if(m.from_square in qSquares):
-                qSquares[m.from_square] += 1 
-
-        return sum(qSquares.values())
-
-
-
-    def _allPieces(self, board: chess.Board, color: chess.Color) -> t.Dict[int, int]:
-        outdict = {
-                chess.PAWN: 0,
-                chess.BISHOP: 0,
-                chess.KNIGHT: 0,
-                chess.QUEEN: 0,
-                chess.ROOK: 0
-                }
-
-        pieceDict = board.piece_map()
-
-        for s, p in pieceDict.items():
-            if(p.piece_type != chess.KING and p.color == color):
-                outdict[p.piece_type] += 1
-
-
-        return outdict
         
 class EvalFuncTest(unittest.TestCase):
 
     def setUp(self):
         self.ef = EvalFunc()
 
-    def testCenterPawnCount(self):
-        b = chess.Board('4k3/8/8/3P4/4P3/8/8/4K3 w - - 0 1')
 
-        bCount = self.ef._centerpawnCount(b, chess.BLACK)
-        wCount = self.ef._centerpawnCount(b, chess.WHITE)
 
-        self.assertEqual(bCount, 0)
-        self.assertEqual(wCount, 2)
-
-        b = chess.Board('4k3/8/8/3pP3/4P3/8/8/4K3 w - - 0 1')
-
-        bCount = self.ef._centerpawnCount(b, chess.BLACK)
-        wCount = self.ef._centerpawnCount(b, chess.WHITE)
-
-        self.assertEqual(bCount, 1)
-        self.assertEqual(wCount, 2)
-    
-    def testKingPawnShield(self):
-        b = chess.Board("8/8/8/8/8/8/1P6/K7 w - - 0 1")
-        wCount = self.ef._kingPawnShield(b, chess.WHITE)
-
-        self.assertEqual(wCount, 1)
-
-        b = chess.Board("8/8/8/4P3/2PK4/4P3/8/8 w - - 0 1")
-        wCount = self.ef._kingPawnShield(b, chess.WHITE)
-
-        self.assertEqual(wCount, 3)
-
-        b = chess.Board("3K4/3P4/8/8/2P5/4P3/8/8 w - - 0 1")
-        wCount = self.ef._kingPawnShield(b, chess.WHITE)
-
-        self.assertEqual(wCount, 1)
-
-        b = chess.Board("8/8/6P1/7K/2P4P/8/8/8 w - - 0 1")
-        wCount = self.ef._kingPawnShield(b, chess.WHITE)
-
-        self.assertEqual(wCount, 2)
-
-    def testKingDefended(self):
-        b = chess.Board('8/8/8/3bP3/2PK4/3RP3/8/8 w - - 0 1')
-
-        pieces = self.ef._kingDefended(b, chess.WHITE)
-        self.assertEqual([chess.PAWN, chess.ROOK, chess.PAWN, chess.PAWN], pieces)
-
-    def testKingAttacked(self):
-        b = chess.Board('8/8/8/3bP3/2PK4/3RP3/8/8 w - - 0 1')
-
-        pieces = self.ef._kingAttacked(b, chess.WHITE)
-        self.assertEqual([chess.BISHOP], pieces)
-
-    def testBishopMob(self):
-        b = chess.Board('3k4/8/8/4PB2/2PK4/3RP3/1B6/8 w - - 0 1')
-        self.ef._setpieces(b)
-        mob = self.ef._bishopMob(b, chess.WHITE)
-        self.assertEqual(mob, 12)
-
-    def testBishopOnLarge(self):
-        b = chess.Board('3k4/8/8/4P3/2PKB3/1B1RP3/8/8 w - - 0 1')
-        res = self.ef._bishopOnLarge(b, chess.WHITE)
-        self.assertEqual(res, 1)
-
-        b = chess.Board('3k4/8/3B4/4P3/2PK4/3RP3/1B6/8 w - - 0 1')
-        res = self.ef._bishopOnLarge(b, chess.WHITE)
-        self.assertEqual(res, 1)
-
-    
-    def testBishopPair(self):
-        b = chess.Board('3k4/8/8/4P3/2PKB3/1B1RP3/8/8 w - - 0 1')
-        res = self.ef._bishopPair(b, chess.WHITE)
-        self.assertEqual(res, 1)
-
-        b = chess.Board('3k4/8/8/4P3/2PKB3/1R1RP3/8/8 w - - 0 1')
-        res = self.ef._bishopPair(b, chess.WHITE)
-        self.assertEqual(res, 0)
-
-    def testKnightMob(self):
-        b = chess.Board('3k4/8/8/4PN2/2PK4/3RP3/1N6/8 w - - 0 1')
-
-
-        mob = self.ef._knightMob(b, chess.WHITE)
-        self.assertEqual(mob, 8)
-
-    def testKnightSupport(self):
-        b = chess.Board('3k4/8/8/5N2/8/8/1N6/3K4 w - - 0 1')
-        mob = self.ef._knightSupport(b, chess.WHITE)
-        self.assertEqual(mob, 0)
-
-        b = chess.Board('3k4/8/8/5N2/6P1/8/1N6/3K4 w - - 0 1')
-        mob = self.ef._knightSupport(b, chess.WHITE)
-        self.assertEqual(mob, 1)
-
-        b = chess.Board('3k4/8/8/5N2/6P1/8/1N6/P2K4 w - - 0 1')
-        mob = self.ef._knightSupport(b, chess.WHITE)
-        self.assertEqual(mob, 2)
-
-        b = chess.Board('3k4/8/6P1/5N2/8/P7/1N6/3K4 w - - 0 1')
-        mob = self.ef._knightSupport(b, chess.WHITE)
-        self.assertEqual(mob, 0)
-
-
-        b = chess.Board('3k4/4n3/6P1/2n2N2/8/P7/1N6/3K4 w - - 0 1')
-        mob = self.ef._knightSupport(b, chess.BLACK)
-        self.assertEqual(mob, 0)
-
-        b = chess.Board('3k4/8/6P1/2n2N1p/6n1/P7/1N6/3K4 w - - 0 1')
-        mob = self.ef._knightSupport(b, chess.BLACK)
-        self.assertEqual(mob, 1)
-
-        b = chess.Board('3k4/8/1p4P1/2n2N1p/6n1/P7/1N6/3K4 w - - 0 1')
-        mob = self.ef._knightSupport(b, chess.BLACK)
-        self.assertEqual(mob, 2)
-
-        b = chess.Board('3k4/4n3/4p1P1/2n2N2/2p5/P7/1N6/3K4 w - - 0 1')
-        mob = self.ef._knightSupport(b, chess.BLACK)
-        self.assertEqual(mob, 0)
-
-    def testKnightPeriphery0(self):
-        b = chess.Board('3k4/8/8/8/N6N/8/8/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery0(b, chess.WHITE)
-        # print(mob)
-        self.assertEqual(mob, 2)
-
-        b = chess.Board('3k4/8/8/5N2/6P1/8/1N6/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery0(b, chess.WHITE)
-        self.assertEqual(mob, 0)
-
-        b = chess.Board('3k1N2/8/8/8/6P1/8/8/1N1K4 w - - 0 1')
-        mob = self.ef._knightPeriphery0(b, chess.WHITE)
-        self.assertEqual(mob, 2)
-
-        b = chess.Board('2nk4/8/8/8/2N2N2/7n/8/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery0(b, chess.WHITE)
-        self.assertEqual(mob, 0)
-
-    def testKnightPeriphery1(self):
-        b = chess.Board('3k4/8/8/8/6N1/8/1N6/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery1(b, chess.WHITE)
-        # print(mob)
-        self.assertEqual(mob, 2)
-
-        b = chess.Board('3k4/8/8/5N2/6P1/2N5/8/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery1(b, chess.WHITE)
-        self.assertEqual(mob, 0)
-
-        b = chess.Board('3k4/4N3/8/8/6P1/8/2N5/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery1(b, chess.WHITE)
-        self.assertEqual(mob, 2)
-
-        b = chess.Board('3k4/2n5/8/8/2N2N2/8/6n1/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery1(b, chess.WHITE)
-        self.assertEqual(mob, 0)
-
-
-    def testKnightPeriphery2(self):
-        b = chess.Board('3k4/8/8/8/2N2N2/8/8/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery2(b, chess.WHITE)
-        # print(mob)
-        self.assertEqual(mob, 2)
-
-        b = chess.Board('3k4/8/8/3N4/4N1P1/8/8/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery2(b, chess.WHITE)
-        self.assertEqual(mob, 0)
-
-        b = chess.Board('3k4/8/4N3/8/6P1/3N4/8/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery2(b, chess.WHITE)
-        self.assertEqual(mob, 2)
-
-        b = chess.Board('3k4/8/2n5/8/3NN3/5n2/8/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery2(b, chess.WHITE)
-        self.assertEqual(mob, 0)
-
-    def testKnightPeriphery3(self):
-        b = chess.Board('3k4/8/8/3N4/4N3/8/8/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery3(b, chess.WHITE)
-        # print(mob)
-        self.assertEqual(mob, 2)
-
-        b = chess.Board('3k4/2N5/8/8/6P1/8/5N2/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery3(b, chess.WHITE)
-        self.assertEqual(mob, 0)
-
-        b = chess.Board('3k4/8/8/4N3/3N2P1/8/8/3K4 w - - 0 1')
-        mob = self.ef._knightPeriphery3(b, chess.WHITE)
-        self.assertEqual(mob, 2)
-
-        b = chess.Board('3k4/8/8/3n4/4n3/1N6/8/3KN3 w - - 0 1')
-        mob = self.ef._knightPeriphery3(b, chess.WHITE)
-        self.assertEqual(mob, 0)
-
-    def testIsoPawn(self):
-        b = chess.Board('3k4/8/8/8/3P2P1/1P2P3/8/3K4 w - - 0 1')
-        mob = self.ef._isoPawn(b, chess.WHITE)
-        # print(mob)
-        self.assertEqual(mob, 2)
-
-
-    def testDoubledPawn(self):
-        b = chess.Board('3k4/8/8/8/4P1P1/1P2P3/8/3K4 w - - 0 1')
-        dpc = self.ef._doubledPawn(b, chess.WHITE)
-        self.assertEqual(dpc, 2)
-
-    def testPassPawn(self):
-        b = chess.Board('3k4/8/3p2p1/8/6P1/1P2P3/8/Q2K4 w - - 0 1')
-        dpc = self.ef._passPawn(b, chess.WHITE)
-        self.assertEqual(dpc, 1)
-
-        b = chess.Board('3k4/8/2pp2p1/8/6P1/1P2P3/8/Q2K4 w - - 0 1')
-        dpc = self.ef._passPawn(b, chess.WHITE)
-        self.assertEqual(dpc, 0)
-
-        b = chess.Board('3k4/8/2pp2p1/8/6P1/1P2P3/8/Q2K4 w - - 0 1')
-        dpc = self.ef._passPawn(b, chess.BLACK)
-        self.assertEqual(dpc, 0)
-
-        b = chess.Board('3k4/8/2pp2p1/8/6P1/4P3/8/Q2K4 w - - 0 1')
-        dpc = self.ef._passPawn(b, chess.BLACK)
-        self.assertEqual(dpc, 1)
-
-
-    def testRookBehindPassPawn(self):
-        b = chess.Board('3k4/8/3p2p1/8/6P1/1P2P3/1R6/Q2K4 w - - 0 1')
-        dpc = self.ef._rookBehindPassPawn(b, chess.WHITE)
-        self.assertEqual(dpc, 1)
-
-        b = chess.Board('3k4/8/2pp2p1/8/6P1/1P2P3/4R3/Q2K4 w - - 0 1')
-        dpc = self.ef._rookBehindPassPawn(b, chess.WHITE)
-        self.assertEqual(dpc, 0)
-
-        b = chess.Board('2rk4/8/2pp2p1/8/6P1/1P2P3/8/Q2K4 w - - 0 1')
-        dpc = self.ef._rookBehindPassPawn(b, chess.BLACK)
-        self.assertEqual(dpc, 0)
-
-        b = chess.Board('3k4/2r5/2pp2p1/8/6P1/4P3/8/Q2K4 w - - 0 1')
-        dpc = self.ef._rookBehindPassPawn(b, chess.BLACK)
-        self.assertEqual(dpc, 1)
-
-    def testBackwardPawn(self):
-        b = chess.Board('3k4/2r5/2pp2p1/8/3P2P1/4P3/8/Q2K4 w - - 0 1')
-        dpc = self.ef._backwardPawn(b, chess.WHITE)
-        self.assertEqual(dpc, 1)
-
-        b = chess.Board('3k4/2r5/2pp2p1/8/6P1/4P3/8/Q2K4 w - - 0 1')
-        dpc = self.ef._backwardPawn(b, chess.WHITE)
-        self.assertEqual(dpc, 0)
-
-        b = chess.Board('3k4/2r5/2p3p1/3p4/6P1/4P3/8/Q2K4 w - - 0 1')
-        dpc = self.ef._backwardPawn(b, chess.BLACK)
-        self.assertEqual(dpc, 1)
-
-        b = chess.Board('2rk4/8/2pp2p1/8/6P1/1P2P3/8/Q2K4 w - - 0 1')
-        dpc = self.ef._backwardPawn(b, chess.BLACK)
-        self.assertEqual(dpc, 0)
-
-    def testBlockPawn(self):
-        b = chess.Board('3k4/2r5/2p3p1/3p4/6P1/3N4/3P4/Q2K4 w - - 0 1')
-        dpc = self.ef._blockPawn(b, chess.WHITE)
-        self.assertEqual(dpc, 1)
-
-    def testRookOpenFile(self):
-        b = chess.Board('3k4/2r5/1p4p1/3p4/6P1/3N4/3P4/Q2K4 w - - 0 1')
-        dpc = self.ef._rookopenfile(b, chess.BLACK)
-        self.assertEqual(dpc, 1)
-
-
-    def testRookSemiOpenFile(self):
-        b = chess.Board('3k4/2r5/1p4p1/3p4/6P1/2PN4/3P4/Q2K4 w - - 0 1')
-        dpc = self.ef._rooksemiopenfile(b, chess.BLACK)
-        self.assertEqual(dpc, 1)
-
-
-    def testRookClosedFile(self):
-        b = chess.Board('3k4/2r5/2p3p1/3p4/6P1/2PN4/3P4/Q2K4 w - - 0 1')
-        dpc = self.ef._rookclosedfile(b, chess.BLACK)
-        self.assertEqual(dpc, 1)
-
-    def testRookOnSeventh(self):
-        b = chess.Board('3k4/1Rr2R2/2p3p1/3p4/6P1/2PN4/3P4/Q2K4 w - - 0 1')
-        dpc = self.ef._rookOnSeventh(b, chess.WHITE)
-        self.assertEqual(dpc, 2)
-    
-    def testRookMob(self):
-        b = chess.Board('3k4/1Rr2R2/2p3p1/3p4/6P1/2PN4/3P4/Q2K4 w - - 0 1')
-        dpc = self.ef._rookMob(b, chess.WHITE)
-        self.assertEqual(dpc, 21)
- 
-    def testQueenMob(self):
-        b = chess.Board('3k4/1Rr2R2/2p3p1/3p4/6P1/2PN4/3P4/Q2K4 w - - 0 1')
-        dpc = self.ef._queenMob(b, chess.WHITE)
-        self.assertEqual(dpc, 10)
-        
-
-    def testAllPieces(self):
-        b = chess.Board('1q1k4/4n1p1/8/2B2N2/4P1P1/1P2P1N1/8/Q2K1R2 w - - 0 1')
-        dict = self.ef._allPieces(b, chess.WHITE)
-
-        self.assertEqual(dict, {
-            chess.ROOK: 1,
-            chess.QUEEN: 1,
-            chess.BISHOP: 1,
-            chess.KNIGHT: 2,
-            chess.PAWN: 4
-            })
-
-    def testTestEvaluation(self):
+    def testPiecesValue(self):
         b = chess.Board('3k4/2q5/8/8/8/8/8/3K4 w - - 0 1')
-        v = self.ef.testEval(b)
+        v = self.ef.piecesValueEvaluation(b)
 
         self.assertEqual(v, -900)
         b = chess.Board('3k4/2q5/8/8/8/8/2Q1N3/3K4 w - - 0 1')
-        v = self.ef.testEval(b)
+        v = self.ef.piecesValueEvaluation(b)
         self.assertEqual(v, 300)
         
         b = chess.Board('3k4/2q5/8/8/8/8/8/3K4 b - - 0 1')
-        v = self.ef.testEval(b)
+        v = self.ef.piecesValueEvaluation(b)
 
         self.assertEqual(v, 900)
         b = chess.Board('3k4/2q5/8/8/8/8/2Q1N3/3K4 b - - 0 1')
-        v = self.ef.testEval(b)
+        v = self.ef.piecesValueEvaluation(b)
         self.assertEqual(v, -300)
 
+    def testMobility(self):
+        b = chess.Board('8/8/3p4/8/8/3R4/3P4/8 w - - 0 1')
+        v = self.ef.mobEvaluation(b)
+
+        self.assertEqual(v, 10 * 9)
+        b = chess.Board('8/8/3p4/8/5p2/4B3/3P4/8 w - - 0 1')
+        v = self.ef.mobEvaluation(b)
+        self.assertEqual(v, 13 * 7)
+        
+        b = chess.Board('8/8/3p4/8/5p2/4Q3/3P4/8 w - - 0 1')
+        v = self.ef.mobEvaluation(b)
+
+        self.assertEqual(v, 3 * 21)
+        b = chess.Board('8/8/8/5p2/2p5/4N3/2P5/8 w - - 0 1')
+        v = self.ef.mobEvaluation(b)
+        self.assertEqual(v, 7 * 14)
+
+    def testAdjacentPieces(self):
+        b = chess.Board('8/8/8/8/3p4/3PN3/5p2/8 w - - 0 1')
+        v = self.ef._adjacentPieces(chess.E3, b, chess.WHITE)
+
+        self.assertDictEqual(v, {
+            (1, -1): chess.Piece(chess.PAWN, chess.BLACK),
+            (-1, 0): chess.Piece(chess.PAWN, chess.WHITE),
+            (-1, 1): chess.Piece(chess.PAWN, chess.BLACK)
+        })
+
+        b = chess.Board('8/8/8/8/3p4/3Pn3/5p2/8 w - - 0 1')
+        v = self.ef._adjacentPieces(chess.E3, b, chess.BLACK)
+
+        self.assertDictEqual(v, {
+            (1, 1): chess.Piece(chess.PAWN, chess.BLACK),
+            (-1, 0): chess.Piece(chess.PAWN, chess.WHITE),
+            (-1, -1): chess.Piece(chess.PAWN, chess.BLACK)
+        })
+
+        b = chess.Board('8/8/8/8/3p2P1/7N/6p1/8 w - - 0 1')
+        v = self.ef._adjacentPieces(chess.H3, b, chess.WHITE)
+
+        self.assertDictEqual(v, {
+            (-1, 1): chess.Piece(chess.PAWN, chess.WHITE),
+            (-1, -1): chess.Piece(chess.PAWN, chess.BLACK)
+        })
+    
+        b = chess.Board('8/8/8/8/3p2P1/7n/6p1/8 w - - 0 1')
+        v = self.ef._adjacentPieces(chess.H3, b, chess.BLACK)
+
+        self.assertDictEqual(v, {
+            (-1, -1): chess.Piece(chess.PAWN, chess.WHITE),
+            (-1, 1): chess.Piece(chess.PAWN, chess.BLACK)
+        })
+
+        b = chess.Board('8/8/8/8/3p4/8/3P4/4Np2 w - - 0 1')
+        v = self.ef._adjacentPieces(chess.E1, b, chess.WHITE)
+
+        self.assertDictEqual(v, {
+            (-1, 1): chess.Piece(chess.PAWN, chess.WHITE),
+            (1, 0): chess.Piece(chess.PAWN, chess.BLACK)
+        })
+    
+        b = chess.Board('8/8/8/8/3p4/8/3P4/4np2 w - - 0 1')
+        v = self.ef._adjacentPieces(chess.E1, b, chess.BLACK)
+
+        self.assertDictEqual(v, {
+            (-1, -1): chess.Piece(chess.PAWN, chess.WHITE),
+            (1, 0): chess.Piece(chess.PAWN, chess.BLACK)
+        })
+    
 if __name__ == '__main__':
     unittest.main()
 
