@@ -287,23 +287,29 @@ class EvalFunc:
 
         isIso = len(adjacentPieces) == 0
 
-        bonus += self.parameters.pIso
+        if(isIso):
+            bonus += self.parameters.pIso
         
         ##
         ## DOUBLED PAWNS
         ## 
-        ranksAhead = range(rank + 1, 8) 
-        ranksBehind = range(0, rank)
+        ranksAhead = list(range(rank + 1, 8)) 
+        ranksBehind = list(range(0, rank))
 
         if(color == chess.BLACK):
             ranksAhead, ranksBehind = ranksBehind, ranksAhead
 
-        piecesBehindMask = reduce(lambda x, y: chess.BB_RANKS[x] | chess.BB_RANKS[y], ranksBehind[1:], ranksBehind[0]) & chess.BB_FILES[file]
+        ranksBehindMasks = list(map(lambda x: chess.BB_RANKS[x], ranksBehind))
+        ranksAheadMasks = list(map(lambda x: chess.BB_RANKS[x], ranksAhead))
+
+        piecesBehindMask = reduce(lambda x, y: x | y, ranksBehindMasks, 0) & chess.BB_FILES[file]
         piecesBehind = board.piece_map(mask = piecesBehindMask)
 
-        for _, p in piecesBehind:
-            if(p != None and p.pieceType == chess.PAWN and p.color == color):
+        isDouble = False
+        for _, p in piecesBehind.items():
+            if(p != None and p.piece_type == chess.PAWN and p.color == color):
                 bonus += self.parameters.pDouble
+                isDouble = True
                 break
 
         ##
@@ -316,8 +322,10 @@ class EvalFunc:
         if((file + 1) < 8):
             files.append(file + 1)
 
-        adjacentFilesMask = reduce(lambda x, y: chess.BB_FILES[x] | chess.BB_FILES[y], files[1:], files[0])
-        piecesAheadMask = reduce(lambda x, y: chess.BB_RANKS[x] | chess.BB_RANKS[y], ranksAhead[1:], ranksAhead[0])
+        fileMasks = list(map(lambda x: chess.BB_FILES[x], files))
+
+        adjacentFilesMask = reduce(lambda x, y: x | y, fileMasks, 0)
+        piecesAheadMask = reduce(lambda x, y: x | y, ranksAheadMasks, 0)
 
         piecesAheadOnNeighbouringFilesMask = piecesAheadMask & adjacentFilesMask
         piecesAheadOnNeighbouringFiles = board.piece_map(
@@ -325,8 +333,8 @@ class EvalFunc:
         )
 
         isPassPawn = True 
-        for _, p in piecesAheadOnNeighbouringFiles:
-            if(p != None and p.pieceType == chess.PAWN and p.color == (not color)):
+        for _, p in piecesAheadOnNeighbouringFiles.items():
+            if(p != None and p.piece_type == chess.PAWN and p.color == (not color)):
                 isPassPawn = False 
                 break
         
@@ -336,9 +344,9 @@ class EvalFunc:
         ##
         ## ROOK BEHIND PASS PAWN 
         ##
-        if(isPassPawn):
-            for _, p in piecesBehind:
-                if(p != None and p.pieceType == chess.ROOK and p.color == color):
+        if(isPassPawn and (not isDouble)):
+            for _, p in piecesBehind.items():
+                if(p != None and p.piece_type == chess.ROOK and p.color == color):
                     bonus += self.parameters.pRookBehindPawn
 
         ##
@@ -359,19 +367,19 @@ class EvalFunc:
                     if(p != None and p.piece_type == chess.PAWN and p.color == color):
                         isBackward = True
 
-            if(isBackward):
-                bonus += self.parameters.pBackward
+                if(isBackward):
+                    bonus += self.parameters.pBackward
 
         ##
         ## BLOCKED PAWN
         ##
         if(isCentral):
             piecesAhead = board.piece_map(
-                mask = piecesAhead & chess.BB_FILES[file]
+                mask = piecesAheadMask & chess.BB_FILES[file]
             )
 
             isBlocked = False
-            for _, p in piecesAhead:
+            for _, p in piecesAhead.items():
                 if(p != None and p.color == color):
                     isBlocked = True
 
@@ -424,17 +432,6 @@ class EvalFunc:
 
         if(isSupported):
             bonus += self.parameters.kSupported
-
-        ##
-        ## KNIGHT MOBILITY
-        ##
-
-        mob = 0
-        for m in board.legal_moves:
-            if(m.from_square == square):
-                mob += 1 
-
-        bonus += mob * self.parameters.kMob
 
         return bonus
 
@@ -707,7 +704,94 @@ class EvalFuncTest(unittest.TestCase):
             (-1, -1): chess.Piece(chess.PAWN, chess.WHITE),
             (1, 0): chess.Piece(chess.PAWN, chess.BLACK)
         })
-    
+
+    def testRookEvaluation(self):
+        b = chess.Board('8/3P1R2/1p1P4/8/8/1R1R2R1/1P3r2/8 w - - 0 1')
+        v = self.ef.rookEvaluation(chess.G3, b, chess.WHITE)
+        self.assertEqual(v, 27)
+
+        v = self.ef.rookEvaluation(chess.D3, b, chess.WHITE)
+        self.assertEqual(v, 57)
+
+        v = self.ef.rookEvaluation(chess.B3, b, chess.WHITE)
+        self.assertEqual(v, -46)
+
+        v = self.ef.rookEvaluation(chess.F2, b, chess.BLACK)
+        self.assertEqual(v, 41 + 27)
+
+        v = self.ef.rookEvaluation(chess.F7, b, chess.WHITE)
+        self.assertEqual(v, 41 + 27)
+
+    def testKnightEvaluation(self):
+        b = chess.Board('8/3n2N1/7P/n4n2/3n4/2p3p1/5n2/8 w - - 0 1')
+        v = self.ef.knightEvaluation(chess.A5, b, chess.BLACK)
+        self.assertEqual(v, -51)
+
+        v = self.ef.knightEvaluation(chess.D7, b, chess.BLACK)
+        self.assertEqual(v, -18)
+
+        v = self.ef.knightEvaluation(chess.F5, b, chess.BLACK)
+        self.assertEqual(v, 45)
+
+        v = self.ef.knightEvaluation(chess.D4, b, chess.BLACK)
+        self.assertEqual(v, -1)
+
+        v = self.ef.knightEvaluation(chess.F2, b, chess.BLACK)
+        self.assertEqual(v, 40 + -18)
+
+        v = self.ef.knightEvaluation(chess.G7, b, chess.WHITE)
+        self.assertEqual(v, 40 + -18)
+
+    def testBishopEvaluation(self):
+        b = chess.Board('8/3b4/2b2b2/8/8/2B2B2/8/3B4 w - - 0 1')
+        v = self.ef.bishopEvaluation(chess.C3, b, chess.WHITE)
+        self.assertEqual(v, 74)
+
+        v = self.ef.bishopEvaluation(chess.F3, b, chess.WHITE)
+        self.assertEqual(v, 74)
+
+        v = self.ef.bishopEvaluation(chess.C6, b, chess.BLACK)
+        self.assertEqual(v, 74)
+
+        v = self.ef.bishopEvaluation(chess.F6, b, chess.BLACK)
+        self.assertEqual(v, 74)
+
+        v = self.ef.bishopEvaluation(chess.D7, b, chess.BLACK)
+        self.assertEqual(v, 0)
+
+        v = self.ef.bishopEvaluation(chess.D1, b, chess.WHITE)
+        self.assertEqual(v, 0)
+
+    def testPawnEvaluation(self):
+        b = chess.Board('8/8/8/4N3/3PP3/8/8/8 w - - 0 1')
+        v = self.ef.pawnEvaluation(chess.D4, b, chess.WHITE)
+
+        self.assertEqual(v, -8 + 62)
+
+        v = self.ef.pawnEvaluation(chess.E4, b, chess.WHITE)
+        self.assertEqual(v, -8 + 62 + -23) 
+
+        b = chess.Board('8/8/8/8/3P4/8/8/8 w - - 0 1')
+        v = self.ef.pawnEvaluation(chess.D4, b, chess.WHITE)
+        self.assertEqual(v, -8 + -3 + 62)
+
+        b = chess.Board('8/8/8/8/3P4/3P4/8/8 w - - 0 1')
+        v = self.ef.pawnEvaluation(chess.D4, b, chess.WHITE)
+        self.assertEqual(v, -8 + 62 + -7)
+
+        b = chess.Board('8/8/8/8/3P4/8/8/3R4 w - - 0 1')
+        v = self.ef.pawnEvaluation(chess.D4, b, chess.WHITE)
+        self.assertEqual(v, -8 + 62 + 30 + -3)
+
+        b = chess.Board('8/8/8/8/3P4/3P4/8/3R4 w - - 0 1')
+        v = self.ef.pawnEvaluation(chess.D4, b, chess.WHITE)
+        self.assertEqual(v, -8 + 62 + -7)
+
+        b = chess.Board('8/8/8/4P3/3P4/8/8/8 w - - 0 1')
+        v = self.ef.pawnEvaluation(chess.D4, b, chess.WHITE)
+        self.assertEqual(v, -8 + 62 + -14)
+
+
 if __name__ == '__main__':
     unittest.main()
 
