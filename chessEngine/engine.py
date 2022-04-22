@@ -1,5 +1,5 @@
 import chess
-import evalfuction as ef
+import oldevalfuction as oef
 import search as s
 from collections import defaultdict
 import csv
@@ -8,11 +8,7 @@ import csv
 
 class Engine:
     def __init__(self, depth):
-        self.ef = ef.EvalFunc()
-        self.ns = s.NegaSearch(depth, self.ef)
-    
-    def setEvaluationParameters(self, value):
-        self.ef = ef.EvalFunc(value)
+        self.ns = s.NegaSearch(depth)
 
     def printeval(self, fen: str):
         board = chess.Board(fen)
@@ -42,6 +38,6 @@ class Engine:
         return board.san(self.ns.bestMove)
 
 if __name__ == '__main__':
-    e = Engine(6)
+    e = Engine(8)
 
     e.printeval('2r4r/1bn1qpk1/p3p2p/1p1pP2R/3N1QP1/8/PPP3BP/3R2K1 w - - 1 28')

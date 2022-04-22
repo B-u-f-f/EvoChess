@@ -1,5 +1,7 @@
 import chess
 import evalfuction as ef
+import oldevalfuction as oef
+
 import utility as u
 
 import random as r
@@ -303,9 +305,9 @@ class MoveOrdering:
             self.killerMoves[depth] = [move]
         
 class NegaSearch:
-    def __init__(self, maxDepth: int, evaluation: ef.EvalFunc) -> None:
+    def __init__(self, maxDepth: int) -> None:
         self.maxDepth: int = maxDepth
-        self.evaluation: ef.EvalFunc = evaluation
+        self.evaluation: ef.EvalFunc = ef.EvalFunc() 
 
         self.tt: TranspositionTable = TranspositionTable()
         self.hashFunc = ZobristHash()
@@ -392,7 +394,7 @@ class NegaSearch:
 
         # Reached the leaf node
         if(depth <= 0):
-            return self.evaluation.testEval(board)
+            return self.evaluation.testEval2(board)
 
         # checkmate or stalemate
         if(board.legal_moves.count() == 0):

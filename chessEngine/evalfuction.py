@@ -1,5 +1,4 @@
 from functools import reduce
-from queue import Empty
 import chess
 import unittest
 
@@ -197,6 +196,32 @@ class EvalFunc:
 
         eval_score = self.piecesValueEvaluation(board) 
         return eval_score
+
+    def testEval2(self, board:chess.Board) -> float:
+        
+        EVAL_FUNCS = {
+            chess.ROOK: self.rookEvaluation,
+            chess.PAWN: self.pawnEvaluation,
+            chess.BISHOP: self.bishopEvaluation,
+            chess.KNIGHT: self.knightEvaluation
+        }
+
+        color = board.turn
+        contrib: t.Dict[bool, int] = {
+            color: 1,
+            (not color): -1
+        } 
+
+        evalScore = self.piecesValueEvaluation(board) + self.mobEvaluation(board)
+
+        piecemap = board.piece_map()
+        for s, p in piecemap.items():
+            if(p.piece_type == chess.QUEEN or p.piece_type == chess.KING):
+                continue 
+
+            evalScore += contrib[p.color] * EVAL_FUNCS[p.piece_type](s, board, p.color)
+
+        return evalScore 
 
     def _adjacentPieces(self, square: int, board: chess.Board, color: bool) -> t.Dict[int, chess.Piece]:
         file: int = chess.square_file(square)
