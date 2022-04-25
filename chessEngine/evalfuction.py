@@ -4,6 +4,8 @@ import unittest
 
 import typing as t
 
+import pieceNeigboursDict as pnd
+
 
 class PieceTables:
     def __init__(self) -> None:
@@ -168,29 +170,6 @@ class EvalFunc:
             self.parameters = params
 
     
-    def _setpieces(self, board: chess.Board) -> None:
-        self.pieceSquares = {
-                (chess.BLACK, chess.PAWN) : [],
-                (chess.BLACK, chess.ROOK) : [],
-                (chess.BLACK, chess.QUEEN) : [],
-                (chess.BLACK, chess.BISHOP) : [],
-                (chess.BLACK, chess.KNIGHT) : [],
-                (chess.BLACK, chess.KING) : [],
-
-                (chess.WHITE, chess.PAWN) : [],
-                (chess.WHITE, chess.ROOK) : [],
-                (chess.WHITE, chess.QUEEN) : [],
-                (chess.WHITE, chess.BISHOP) : [],
-                (chess.WHITE, chess.KNIGHT) : [],
-                (chess.WHITE, chess.KING) : [],
-                }
-
-
-        piecemap = board.piece_map()
-        
-        for s, p in piecemap.items():
-            self.pieceSquares[(p.color, p.piece_type)].append(s)
-    
     def testEval(self, board: chess.Board) -> float:
         # self._setpieces(board)
 
@@ -223,24 +202,12 @@ class EvalFunc:
 
         return evalScore 
 
-    def _adjacentPieces(self, square: int, board: chess.Board, color: bool) -> t.Dict[int, chess.Piece]:
-        file: int = chess.square_file(square)
-        rank: int = chess.square_rank(square)
-
+    def _adjacentPieces(self, square: int, board: chess.Board, color: bool, mask: int) -> t.Dict[int, chess.Piece]:
         outDict: t.Dict[int, chess.Piece] = {}
-        VALIDRANGE = range(0, 8)
 
-        yMult = -1 if color == chess.BLACK else 1
-        for i in [-1, 0, 1]:
-            for j in [-1, 0, 1]: 
-                if(i == j == 0): 
-                    continue
-
-                if((file + i) in VALIDRANGE and (rank + j) in VALIDRANGE):
-                    p = board.piece_at(chess.square(file + i, rank + j))
-
-                    if(p != None):
-                        outDict[(i, j * yMult)] = p
+        for s, i, j in pnd.PIECE_NEIGHBOURS_DICT[(square, color)]:
+            p = board.occupied_co[color] & mask & chess.BB_SQUARES[s] 
+            outDict[(i, j)] = True if p != 0 else False
 
         return outDict
 
@@ -308,9 +275,9 @@ class EvalFunc:
         ##
         ## ISOLATED PAWNS
         ##
-        adjacentPieces: t.Dict[int, chess.Piece] = self._adjacentPieces(square, board, color)
+        adjacentPieces: t.Dict[int, chess.Piece] = self._adjacentPieces(square, board, color, board.pawns)
 
-        isIso = len(adjacentPieces) == 0
+        isIso = any(adjacentPieces.values()) == False
 
         if(isIso):
             bonus += self.parameters.pIso
@@ -318,51 +285,28 @@ class EvalFunc:
         ##
         ## DOUBLED PAWNS
         ## 
-        ranksAhead = list(range(rank + 1, 8)) 
-        ranksBehind = list(range(0, rank))
+        piecesAboveMask, piecesBelowMask = pnd.RANK_MASKS[rank]
 
         if(color == chess.BLACK):
-            ranksAhead, ranksBehind = ranksBehind, ranksAhead
+            piecesAboveMask, piecesBelowMask = piecesBelowMask, piecesAboveMask 
 
-        ranksBehindMasks = list(map(lambda x: chess.BB_RANKS[x], ranksBehind))
-        ranksAheadMasks = list(map(lambda x: chess.BB_RANKS[x], ranksAhead))
+        piecesBehindMask = piecesBelowMask & chess.BB_FILES[file]
+        pawnsBehind =  piecesBehindMask & board.pawns & board.occupied_co[color]
+        isDouble = pawnsBehind != 0
 
-        piecesBehindMask = reduce(lambda x, y: x | y, ranksBehindMasks, 0) & chess.BB_FILES[file]
-        piecesBehind = board.piece_map(mask = piecesBehindMask)
-
-        isDouble = False
-        for _, p in piecesBehind.items():
-            if(p != None and p.piece_type == chess.PAWN and p.color == color):
-                bonus += self.parameters.pDouble
-                isDouble = True
-                break
+        if(isDouble):
+            bonus += self.parameters.pDouble
 
         ##
         ## PASS PAWNS
         ##
-        files = [file]
-        if((file - 1) >= 0):
-            files.append(file - 1)
+        adjacentFilesMask = pnd.ADJACENT_FILES_MASK[file]
 
-        if((file + 1) < 8):
-            files.append(file + 1)
+        piecesAheadOnNeighbouringFilesMask = piecesAboveMask & adjacentFilesMask
+        enemyPawnsAheadOnNeighbouringFiles =  piecesAheadOnNeighbouringFilesMask & board.pawns & board.occupied_co[not color] 
 
-        fileMasks = list(map(lambda x: chess.BB_FILES[x], files))
-
-        adjacentFilesMask = reduce(lambda x, y: x | y, fileMasks, 0)
-        piecesAheadMask = reduce(lambda x, y: x | y, ranksAheadMasks, 0)
-
-        piecesAheadOnNeighbouringFilesMask = piecesAheadMask & adjacentFilesMask
-        piecesAheadOnNeighbouringFiles = board.piece_map(
-            mask = piecesAheadOnNeighbouringFilesMask
-        )
-
-        isPassPawn = True 
-        for _, p in piecesAheadOnNeighbouringFiles.items():
-            if(p != None and p.piece_type == chess.PAWN and p.color == (not color)):
-                isPassPawn = False 
-                break
-        
+        isPassPawn = enemyPawnsAheadOnNeighbouringFiles == 0
+       
         if(isPassPawn):
             bonus += self.parameters.pPass
 
@@ -370,27 +314,24 @@ class EvalFunc:
         ## ROOK BEHIND PASS PAWN 
         ##
         if(isPassPawn and (not isDouble)):
-            for _, p in piecesBehind.items():
-                if(p != None and p.piece_type == chess.ROOK and p.color == color):
-                    bonus += self.parameters.pRookBehindPawn
+            rooksBehind = piecesBehindMask & board.rooks & board.occupied_co[color]
+
+            if(rooksBehind != 0):
+                bonus += self.parameters.pRookBehindPawn
 
         ##
         ## BACKWARD PAWNS 
         ##
         if(not isIso):
-            b1 = adjacentPieces.get((1, -1))
-            b2 = adjacentPieces.get((0, -1))
-            b3 = adjacentPieces.get((-1, -1))
+            b1 = adjacentPieces.get((1, -1), False)
+            b2 = adjacentPieces.get((0, -1), False)
+            b3 = adjacentPieces.get((-1, -1), False)
 
-            if(b1 == b2 == b3 == None):
-                a1 = adjacentPieces.get((1, 1))
-                a2 = adjacentPieces.get((0, 1))
-                a3 = adjacentPieces.get((-1, 1))
+            if(b1 == b2 == b3 == False):
+                a1 = adjacentPieces.get((1, 1), False)
+                a3 = adjacentPieces.get((-1, 1), False)
 
-                isBackward = False 
-                for p in [a1, a2, a3]:
-                    if(p != None and p.piece_type == chess.PAWN and p.color == color):
-                        isBackward = True
+                isBackward = a1 or a3 
 
                 if(isBackward):
                     bonus += self.parameters.pBackward
@@ -399,14 +340,9 @@ class EvalFunc:
         ## BLOCKED PAWN
         ##
         if(isCentral):
-            piecesAhead = board.piece_map(
-                mask = piecesAheadMask & chess.BB_FILES[file]
-            )
+            piecesAhead = piecesAboveMask & chess.BB_FILES[file] & board.occupied_co[color] 
 
-            isBlocked = False
-            for _, p in piecesAhead.items():
-                if(p != None and p.color == color):
-                    isBlocked = True
+            isBlocked = piecesAhead != 0 
 
             if(isBlocked):
                 bonus += self.parameters.pBlocked
@@ -445,16 +381,11 @@ class EvalFunc:
         ## KNIGHT SUPPORTED 
         ##
 
-        adjacentPieces: t.Dict[int, chess.Piece] = self._adjacentPieces(square, board, color)
-        b1 = adjacentPieces.get((-1, -1))
-        b2 = adjacentPieces.get((0, -1))
-        b3 = adjacentPieces.get((1, -1))
+        adjacentPieces: t.Dict[int, chess.Piece] = self._adjacentPieces(square, board, color, board.pawns)
+        b1 = adjacentPieces.get((-1, -1), False)
+        b3 = adjacentPieces.get((1, -1), False)
 
-        isSupported = False
-        for p in [b1, b2, b3]:
-            if(p != None and p.piece_type == chess.PAWN and p.color == color):
-                isSupported = True
-
+        isSupported = b1 or b3 
         if(isSupported):
             bonus += self.parameters.kSupported
 
@@ -681,55 +612,80 @@ class EvalFuncTest(unittest.TestCase):
 
     def testAdjacentPieces(self):
         b = chess.Board('8/8/8/8/3p4/3PN3/5p2/8 w - - 0 1')
-        v = self.ef._adjacentPieces(chess.E3, b, chess.WHITE)
+        v = self.ef._adjacentPieces(chess.E3, b, chess.WHITE, b.pawns)
 
         self.assertDictEqual(v, {
-            (1, -1): chess.Piece(chess.PAWN, chess.BLACK),
-            (-1, 0): chess.Piece(chess.PAWN, chess.WHITE),
-            (-1, 1): chess.Piece(chess.PAWN, chess.BLACK)
+            (1, -1): False,
+            (-1, 0): True,
+            (-1, 1): False,
+            (-1, -1): False,
+            (1, 1): False,
+            (1, 0): False,
+            (0, 1): False,
+            (0, -1): False,
         })
 
         b = chess.Board('8/8/8/8/3p4/3Pn3/5p2/8 w - - 0 1')
-        v = self.ef._adjacentPieces(chess.E3, b, chess.BLACK)
+        v = self.ef._adjacentPieces(chess.E3, b, chess.BLACK, b.pawns)
 
         self.assertDictEqual(v, {
-            (1, 1): chess.Piece(chess.PAWN, chess.BLACK),
-            (-1, 0): chess.Piece(chess.PAWN, chess.WHITE),
-            (-1, -1): chess.Piece(chess.PAWN, chess.BLACK)
+            (1, -1): False,
+            (-1, 0): False,
+            (-1, 1): False,
+            (-1, -1): True,
+            (1, 1): True,
+            (1, 0): False,
+            (0, 1): False,
+            (0, -1): False,
         })
 
         b = chess.Board('8/8/8/8/3p2P1/7N/6p1/8 w - - 0 1')
-        v = self.ef._adjacentPieces(chess.H3, b, chess.WHITE)
+        v = self.ef._adjacentPieces(chess.H3, b, chess.WHITE, b.pawns)
 
         self.assertDictEqual(v, {
-            (-1, 1): chess.Piece(chess.PAWN, chess.WHITE),
-            (-1, -1): chess.Piece(chess.PAWN, chess.BLACK)
+            (-1, 0): False,
+            (-1, 1): True,
+            (-1, -1): False,
+            (0, 1): False,
+            (0, -1): False,
         })
+
+
     
         b = chess.Board('8/8/8/8/3p2P1/7n/6p1/8 w - - 0 1')
-        v = self.ef._adjacentPieces(chess.H3, b, chess.BLACK)
+        v = self.ef._adjacentPieces(chess.H3, b, chess.BLACK, b.pawns)
 
         self.assertDictEqual(v, {
-            (-1, -1): chess.Piece(chess.PAWN, chess.WHITE),
-            (-1, 1): chess.Piece(chess.PAWN, chess.BLACK)
+            (-1, 0): False,
+            (-1, 1): True,
+            (-1, -1): False,
+            (0, 1): False,
+            (0, -1): False,
         })
 
         b = chess.Board('8/8/8/8/3p4/8/3P4/4Np2 w - - 0 1')
-        v = self.ef._adjacentPieces(chess.E1, b, chess.WHITE)
+        v = self.ef._adjacentPieces(chess.E1, b, chess.WHITE, b.pawns)
 
         self.assertDictEqual(v, {
-            (-1, 1): chess.Piece(chess.PAWN, chess.WHITE),
-            (1, 0): chess.Piece(chess.PAWN, chess.BLACK)
+            (-1, 0): False,
+            (-1, 1): True,
+            (1, 1): False,
+            (1, 0): False,
+            (0, 1): False,
+        })
+   
+        b = chess.Board('8/8/8/8/3p4/8/3P4/4np2 w - - 0 1')
+        v = self.ef._adjacentPieces(chess.E1, b, chess.BLACK, b.pawns)
+
+        self.assertDictEqual(v, {
+            (1, -1): False,
+            (-1, 0): False,
+            (-1, -1): False,
+            (1, 0): True,
+            (0, -1): False,
+            (0, -1): False 
         })
     
-        b = chess.Board('8/8/8/8/3p4/8/3P4/4np2 w - - 0 1')
-        v = self.ef._adjacentPieces(chess.E1, b, chess.BLACK)
-
-        self.assertDictEqual(v, {
-            (-1, -1): chess.Piece(chess.PAWN, chess.WHITE),
-            (1, 0): chess.Piece(chess.PAWN, chess.BLACK)
-        })
-
     def testRookEvaluation(self):
         b = chess.Board('8/3P1R2/1p1P4/8/8/1R1R2R1/1P3r2/8 w - - 0 1')
         v = self.ef.rookEvaluation(chess.G3, b, chess.WHITE)

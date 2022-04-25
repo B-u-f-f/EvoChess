@@ -133,7 +133,10 @@ class ZobristHash:
         return finalHash 
 
     def makeMove(self, board: chess.Board, move: chess.Move, key: int) -> int:
-        key ^= self._getCastlingRightsAfterMoveHash(board, move) 
+        p = board.piece_at(move.to_square)
+
+        if(p == chess.KING or p == chess.ROOK):
+            key ^= self._getCastlingRightsAfterMoveHash(board, move) 
             
         ## piece move
         if(move != chess.Move.null()):
@@ -143,7 +146,8 @@ class ZobristHash:
         key ^= self.blackTurnHash 
 
         ## en passant
-        key ^= self._getEnPassantFileHash(board, move)
+        if(p == chess.PAWN):
+            key ^= self._getEnPassantFileHash(board, move)
 
         return key
 
@@ -289,7 +293,7 @@ class MoveOrdering:
             moves.append((priority, move))
 
         moves = sorted(moves, key = lambda k: k[0], reverse = True)
-        return moves 
+        return [m[1] for m in moves] 
 
     def setBestMove(self, move: chess.Move) -> None:
         self.bestMove = move
@@ -316,13 +320,6 @@ class NegaSearch:
 
     def search(self, board: chess.Board) -> None:
         initalHash = self.hashFunc.hashOfPosition(board)
-
-        # for d in range(1, self.maxDepth + 1):
-        #     print(f'Depth: {d}')
-        #     line = []
-        #     self.auxSearch(board, d, initalHash, line)
-
-        #     self.ordering.setBestMove(line[0][0])
 
         self.auxSearch(board, self.maxDepth, initalHash)
 
@@ -419,16 +416,32 @@ class NegaSearch:
 
         orderedMoves: t.List[chess.Move] = self.ordering.orderMoves(board, depth)
         bestEval = float('-inf')
-        for _, move in orderedMoves:
+        for i, move in enumerate(orderedMoves):
 
             # if(depth == self.maxDepth):
             #     print(move)
-            
+
             newHash = self.hashFunc.makeMove(board, move, hash)
 
-            board.push(move)
-            value = -self.auxSearch(board, depth - 1, newHash, -beta, -alpha) 
-            board.pop()
+            value = 0
+            if(i == 0):
+                board.push(move)
+                value = -self.auxSearch(board, depth - 1, newHash, -beta, -alpha) 
+                board.pop()
+            else:
+                board.push(move)
+                value = -self.auxSearch(board, depth - 1, newHash, -alpha - 1, -alpha)
+                board.pop()
+
+                if(alpha < value < beta):
+                    board.push(move)
+                    value = -self.auxSearch(board, depth - 1, newHash, -beta, -value)
+                    board.pop()
+
+
+            #board.push(move)
+            #value = -self.auxSearch(board, depth - 1, newHash, -beta, -alpha) 
+            #board.pop()
 
             if(value > bestEval):
                 bestEval = value
